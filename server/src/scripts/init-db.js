@@ -16,7 +16,7 @@ const PG_HOST     = process.env.PG_HOST     || 'localhost';
 const PG_PORT     = parseInt(process.env.PG_PORT || '5432');
 const PG_USER     = process.env.PG_USER     || 'postgres';
 const PG_PASSWORD = process.env.PG_PASSWORD || '';
-const PG_DATABASE = process.env.PG_DATABASE || 'langchain_course';
+const PG_DATABASE = process.env.PG_DATABASE || 'ecom_ai';
 
 // 连接到默认的 postgres 数据库（用于创建目标库）
 const adminPool = new Pool({

@@ -21,12 +21,44 @@ ecom-ai-customer/
 
 ### 后端
 
+#### 1. 安装依赖 & 配置环境变量
+
 ```bash
 cd server
-cp .env.example .env   # 配置 API Key 等环境变量
+cp .env.example .env   # 配置 API Key、数据库连接等环境变量
 npm install
+```
+
+#### 2. 初始化数据库（首次启动必做）
+
+> 确保本地 PostgreSQL 已启动，并且已安装 [pgvector](https://github.com/pgvector/pgvector) 扩展。
+
+```bash
+npm run init-db
+```
+
+该脚本会自动完成：
+- 创建目标数据库（默认 `ecom_ai`，可在 `.env` 中通过 `PG_DATABASE` 修改）
+- 启用 `pgvector` 扩展
+- 创建 `knowledge_embeddings` 向量表
+
+#### 3. 入库知识库（使用 RAG 功能前必做）
+
+```bash
+npm run ingest
+```
+
+该脚本会读取 `server/src/data/knowledge/` 下的知识库文件（`products.md`、`policies.md`），切分后写入向量数据库。
+
+> 知识库内容更新后，重新执行 `npm run ingest` 即可全量更新。
+
+#### 4. 启动服务
+
+```bash
 npm run dev
 ```
+
+服务启动后访问 http://localhost:3000
 
 ### 前端
 
