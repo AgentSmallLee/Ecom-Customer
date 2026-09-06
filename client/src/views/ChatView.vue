@@ -104,16 +104,16 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, nextTick } from 'vue';
-import { useChat } from '../composables/useChat.js';
+import { useChat } from '../composables/useChat.ts';
 
 const { messages, streaming, streamText, error, sendMessage, clearMessages } =
   useChat();
 
 const inputText = ref('');
-const messagesRef = ref(null);
-const inputRef = ref(null);
+const messagesRef = ref<HTMLElement | null>(null);
+const inputRef = ref<HTMLTextAreaElement | null>(null);
 
 const quickQuestions = [
   '我的订单在哪里？',
@@ -144,7 +144,7 @@ const handleSend = async () => {
   await sendMessage(text, scrollToBottom);
 };
 
-const handleQuickQuestion = (q) => {
+const handleQuickQuestion = (q: string) => {
   inputText.value = q;
   handleSend();
 };

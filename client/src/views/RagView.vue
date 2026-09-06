@@ -65,14 +65,14 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, nextTick } from 'vue';
-import { useRag } from '../composables/useRag.js';
+import { useRag } from '../composables/useRag.ts';
 
 const { messages, loading, error, ask, clearMessages } = useRag();
 
 const inputText   = ref('');
-const messagesRef = ref(null);
+const messagesRef = ref<HTMLElement | null>(null);
 
 const quickQuestions = [
   '蓝牙耳机 X1 Pro 的续航怎么样？',
@@ -94,7 +94,7 @@ const handleSend = async () => {
   await ask(text, scrollToBottom);
 };
 
-const handleQuick = (q) => {
+const handleQuick = (q: string) => {
   inputText.value = q;
   handleSend();
 };

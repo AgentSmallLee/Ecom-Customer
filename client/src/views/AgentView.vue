@@ -90,14 +90,15 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, nextTick } from 'vue';
-import { useAgent } from '../composables/useAgent.js';
+import { useAgent } from '../composables/useAgent.ts';
+import type { ToolStep } from '../types.ts';
 
 const { messages, loading, steps, error, sendMessage, clearMessages } = useAgent();
 
 const inputText   = ref('');
-const messagesRef = ref(null);
+const messagesRef = ref<HTMLElement | null>(null);
 
 const quickQuestions = [
   '查一下订单 ORD-001 的状态',
@@ -118,12 +119,12 @@ const handleSend = async () => {
   await sendMessage(text, scrollToBottom);
 };
 
-const handleQuick = (q) => {
+const handleQuick = (q: string) => {
   inputText.value = q;
   handleSend();
 };
 
-const formatInput = (input) => {
+const formatInput = (input: ToolStep['toolInput']) => {
   if (!input) return '';
   return Object.values(input).join(' · ');
 };

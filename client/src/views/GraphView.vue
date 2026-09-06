@@ -83,14 +83,15 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, nextTick } from 'vue';
-import { useGraph, NODE_LABELS } from '../composables/useGraph.js';
+import { useGraph, NODE_LABELS } from '../composables/useGraph.ts';
+import type { ToolStep } from '../types.ts';
 
 const { messages, loading, currentNode, error, sendMessage, clearMessages } = useGraph();
 
 const inputText   = ref('');
-const messagesRef = ref(null);
+const messagesRef = ref<HTMLElement | null>(null);
 
 const NODE_DISPLAY = NODE_LABELS;
 
@@ -114,12 +115,12 @@ const handleSend = async () => {
   await sendMessage(text, scrollToBottom);
 };
 
-const handleQuick = (q) => {
+const handleQuick = (q: string) => {
   inputText.value = q;
   handleSend();
 };
 
-const formatStepInput = (input) => {
+const formatStepInput = (input: ToolStep['input']) => {
   if (!input) return '';
   return Object.values(input).join(' · ');
 };
