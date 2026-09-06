@@ -4,6 +4,8 @@
     "moduleResolution": "NodeNext",
     "target": "ES2022",
     "strict": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "esModuleInterop": true,

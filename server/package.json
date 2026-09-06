@@ -4,8 +4,8 @@
   "description": "红松心选 AI 客服系统 — 后端服务",
   "type": "module",
   "scripts": {
-    "dev": "nodemon --watch src --ext ts --exec tsx src/index.ts",
-    "start": "tsx src/index.ts",
+    "dev": "nodemon --watch src --ext ts --exec tsx src/main.ts",
+    "start": "tsx src/main.ts",
     "init-db": "tsx src/scripts/init-db.ts",
     "ingest": "tsx src/scripts/ingest.ts",
     "typecheck": "tsc --noEmit"
@@ -15,11 +15,15 @@
     "@langchain/core": "^1.1.38",
     "@langchain/langgraph": "^1.2.9",
     "@langchain/openai": "^1.4.4",
-    "cors": "^2.8.5",
+    "@nestjs/common": "^12.0.1",
+    "@nestjs/core": "^12.0.1",
+    "@nestjs/platform-express": "^12.0.1",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "langchain": "^1.2.39",
     "pg": "^8.12.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
     "zod": "^3.23.8"
   },
   "devDependencies": {
