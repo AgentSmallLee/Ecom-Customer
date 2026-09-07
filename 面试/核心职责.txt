@@ -1,0 +1,5 @@
+基础层：基于 LCEL 实现流式对话 Chain，ChatPromptTemplate 管理 System / History / Human 三段式 Prompt，StringOutputParser 提取输出，全链路 SSE 流式推送
+工具层：基于 LangGraph createReactAgent 驱动 Function Calling，tool() + zod schema 定义工具，temperature=0 保证参数精确；从消息流解析 tool_calls 中间步骤经 SSE 推送前端展示
+知识层：完整 RAG 流程，RecursiveCharacterTextSplitter 文档切分，pgvector 向量存储，RunnableSequence 组装检索 + 生成，ragChainWithSources 返回答案来源引用
+编排层：LangGraph StateGraph 多链路工作流，Annotation.Root 定义共享状态，条件边实现意图路由，stream updates 模式流式推送节点执行状态，前端可视化轨迹
+记忆层：PostgresSaver Checkpointer 实现按 thread_id 的短期记忆（会话重启不丢）；PostgresStore 按用户命名空间存长期记忆，LLM 结构化提取用户偏好、跨会话召回注入；消息超阈值时 LLM 压缩旧对话为摘要并以 RemoveMessage 裁剪上下文，控制 Token 成本
