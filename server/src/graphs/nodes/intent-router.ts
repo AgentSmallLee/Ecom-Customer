@@ -2,6 +2,7 @@
 import { createModel }        from '../../models/deepseek.ts';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
+import { formatMessagesAsText } from '../memory-context.ts';
 import type { GraphStateType, Intent } from '../state.ts';
 
 const intentPrompt = ChatPromptTemplate.fromMessages([
@@ -28,8 +29,15 @@ const isValidIntent = (s: string): s is Intent =>
   (VALID_INTENTS as string[]).includes(s);
 
 export const intentRouterNode = async (state: GraphStateType) => {
-  const { userInput } = state;
-  const raw    = await chain.invoke({ userInput });
+  const { userInput, messages } = state;
+
+  // 附带最近几轮对话，让"那它发货了吗"这类指代式追问也能正确分类
+  const recentDialogue = formatMessagesAsText((messages || []).slice(0, -1), 4);
+  const input = recentDialogue
+    ? `${userInput}\n\n（最近对话，供理解指代参考）\n${recentDialogue}`
+    : userInput;
+
+  const raw    = await chain.invoke({ userInput: input });
   const intent = raw.trim().toLowerCase();
   const final  = isValidIntent(intent) ? intent : 'general';
   console.log(`[intentRouter] "${userInput}" → ${final}`);

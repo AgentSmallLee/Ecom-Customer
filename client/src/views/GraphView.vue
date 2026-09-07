@@ -8,6 +8,7 @@
           <h1>红松心选智能客服中枢</h1>
           <span class="subtitle">
             {{ loading ? currentNode || '处理中...' : '多 Agent 协作模式' }}
+            · 记忆用户 {{ userId }}
           </span>
         </div>
       </div>
@@ -88,7 +89,7 @@ import { ref, nextTick } from 'vue';
 import { useGraph, NODE_LABELS } from '../composables/useGraph.ts';
 import type { ToolStep } from '../types.ts';
 
-const { messages, loading, currentNode, error, sendMessage, clearMessages } = useGraph();
+const { messages, loading, currentNode, error, userId, sendMessage, clearMessages } = useGraph();
 
 const inputText   = ref('');
 const messagesRef = ref<HTMLElement | null>(null);

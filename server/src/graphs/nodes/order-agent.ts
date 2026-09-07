@@ -1,8 +1,9 @@
 // server/src/graphs/nodes/order-agent.ts
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
-import { HumanMessage, AIMessage } from '@langchain/core/messages';
+import { HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages';
 import { createModel }      from '../../models/deepseek.ts';
 import { allTools }         from '../../tools/order-tools.ts';
+import { buildMemoryContext, formatMessagesAsText } from '../memory-context.ts';
 import type { GraphStateType, ToolStep } from '../state.ts';
 
 const model    = createModel({ temperature: 0 });
@@ -19,11 +20,21 @@ const contentToString = (content: unknown): string =>
   typeof content === 'string' ? content : JSON.stringify(content);
 
 export const orderAgentNode = async (state: GraphStateType) => {
-  const { userInput } = state;
+  const { userInput, messages } = state;
+
+  // 注入对话上下文（摘要 + 长期记忆 + 最近几轮），
+  // 让"查一下我的订单"这类依赖上下文的追问能正确解析
+  const recentDialogue = formatMessagesAsText((messages || []).slice(0, -1), 4);
+  const contextParts = [buildMemoryContext(state), recentDialogue].filter(Boolean);
+  const inputMessages = contextParts.length
+    ? [
+        new SystemMessage(`对话上下文（供理解用户指代时参考）：\n${contextParts.join('\n\n')}`),
+        new HumanMessage(userInput),
+      ]
+    : [new HumanMessage(userInput)];
+
   try {
-    const result = await agentApp.invoke({
-      messages: [new HumanMessage(userInput)],
-    });
+    const result = await agentApp.invoke({ messages: inputMessages });
 
     // 从消息列表提取工具调用步骤
     const msgs  = result.messages;

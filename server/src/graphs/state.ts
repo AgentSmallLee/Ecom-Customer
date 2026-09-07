@@ -44,6 +44,18 @@ export const GraphState = Annotation.Root({
     reducer: (_, next) => next,
     default: () => '',
   }),
+
+  /** 历史对话的 LLM 压缩摘要（长度控制：旧消息删除后以摘要形式保留上下文） */
+  summary: Annotation<string>({
+    reducer: (_, next) => next,
+    default: () => '',
+  }),
+
+  /** 本轮从长期记忆（Store）召回的用户偏好列表 */
+  userMemories: Annotation<string[]>({
+    reducer: (_, next) => next,
+    default: () => [],
+  }),
 });
 
 /** 图状态类型：所有节点函数的入参类型 */

@@ -6,9 +6,12 @@
 //   1. 连接到默认 postgres 库，检查目标数据库是否存在，不存在则创建
 //   2. 切换到目标数据库，启用 pgvector 扩展
 //   3. 创建 knowledge_embeddings 表（IF NOT EXISTS，幂等）
+//   4. 初始化 LangGraph 记忆表：checkpoint（短期记忆）+ store（长期记忆）
 
 import pg from 'pg';
 import 'dotenv/config';
+import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
+import { PostgresStore } from '@langchain/langgraph-checkpoint-postgres/store';
 
 const { Pool } = pg;
 
@@ -66,7 +69,7 @@ const init = async () => {
     await client.query('CREATE EXTENSION IF NOT EXISTS vector;');
     console.log('  ✅ pgvector 扩展已就绪');
 
-    console.log(`[3/3] 创建 knowledge_embeddings 表 ...`);
+    console.log(`[3/4] 创建 knowledge_embeddings 表 ...`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS knowledge_embeddings (
         id       bigserial PRIMARY KEY,
@@ -78,9 +81,27 @@ const init = async () => {
     console.log('  ✅ 表已就绪');
   } finally {
     client.release();
-    await dbPool.end();
   }
 
+  // ── LangGraph 记忆表 ──
+  console.log(`[4/4] 初始化 LangGraph 记忆表（checkpointer + store）...`);
+
+  // 短期记忆：会话 checkpoint（共享 dbPool，不要调用 end()）
+  const saver = new PostgresSaver(dbPool);
+  await saver.setup();
+  console.log('  ✅ checkpoint 表已就绪（checkpoints / checkpoint_blobs / checkpoint_writes）');
+
+  // 长期记忆：跨会话用户偏好（自建连接池，用完关闭）
+  const connString = `postgres://${encodeURIComponent(PG_USER)}:${encodeURIComponent(PG_PASSWORD)}@${PG_HOST}:${PG_PORT}/${PG_DATABASE}`;
+  const store = await PostgresStore.fromConnString(connString);
+  try {
+    await store.setup();
+    console.log('  ✅ store 表已就绪（store / store_vectors）');
+  } finally {
+    await store.stop();
+  }
+
+  await dbPool.end();
   console.log('\n🎉 数据库初始化完成！接下来可以执行 npm run ingest');
 };
 
