@@ -1,6 +1,18 @@
 // server/src/scripts/init-db.ts
-// 数据库初始化脚本 — 第一次部署时执行一次即可
-// 运行：tsx src/scripts/init-db.ts
+// 数据库初始化脚本 — 第一次部署时执行一次即可（幂等，可重复执行）
+//
+// 运行方式（任选其一，推荐用 pnpm 脚本）：
+//   pnpm run init-db          ← 推荐，package.json 中已配置
+//   pnpm exec tsx src/scripts/init-db.ts
+//   npx tsx src/scripts/init-db.ts
+//
+// 注意：不要直接执行 tsx src/scripts/init-db.ts，因为 tsx 是项目 devDependency，
+//       没有全局安装，直接敲命令会提示 "tsx: command not found"。
+//
+// 前置条件：
+//   1. PostgreSQL 服务已启动
+//   2. 已安装 pgvector 扩展（macOS: brew install pgvector）
+//   3. .env 中 PG_HOST / PG_PORT / PG_USER / PG_PASSWORD / PG_DATABASE 配置正确
 //
 // 功能：
 //   1. 连接到默认 postgres 库，检查目标数据库是否存在，不存在则创建
@@ -17,7 +29,7 @@ const { Pool } = pg;
 
 const PG_HOST     = process.env.PG_HOST     || 'localhost';
 const PG_PORT     = parseInt(process.env.PG_PORT || '5432');
-const PG_USER     = process.env.PG_USER     || 'postgres';
+const PG_USER     = process.env.PG_USER     || 'mac';
 const PG_PASSWORD = process.env.PG_PASSWORD || '';
 const PG_DATABASE = process.env.PG_DATABASE || 'ecom_ai';
 
@@ -27,7 +39,7 @@ const adminPool = new pg.Pool({
   port:     PG_PORT,
   user:     PG_USER,
   password: PG_PASSWORD,
-  database: 'postgres',
+  database: 'postgres'
 });
 
 const init = async () => {
