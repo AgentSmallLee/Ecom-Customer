@@ -18,7 +18,7 @@ interface CreateModelOptions {
 export const createModel = (options: CreateModelOptions = {}) => {
   console.log('DEEPSEEK_API_KEY', process.env.DEEPSEEK_API_KEY);
   return new ChatOpenAI({
-    model: process.env.MODEL_NAME || 'deepseek-chat',
+    model: process.env.MODEL_NAME || 'deepseek-v4-flash',
     apiKey: process.env.DEEPSEEK_API_KEY,
     configuration: {
       baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
