@@ -3,15 +3,16 @@
 // GET  /api/chat/history - 获取会话历史（短期记忆，刷新恢复用）
 // POST /api/chat        - 普通对话（一次性返回）
 // POST /api/chat/stream - 流式对话（SSE）
-import { BadRequestException, Body, Controller, Get, Inject, Post, Query, Res } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Inject, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { Response } from 'express';
 import { ChatService } from './chat.service.ts';
+import { AuthGuard } from '../common/auth/auth.guard.ts';
+import type { AuthenticatedRequest } from '../common/auth/request.interface.ts';
 
 interface ChatRequestBody {
   message?: string;
   threadId?: string;
-  userId?: string;
 }
 
 @Controller('chat')
@@ -28,7 +29,11 @@ export class ChatController {
 
   // ─── 获取会话历史 ────────────────────────────────────────────────
   @Get('history')
-  async history(@Query('threadId') threadId: string | undefined) {
+  @UseGuards(AuthGuard)
+  async history(
+    @Query('threadId') threadId: string | undefined,
+    @Req() _req: AuthenticatedRequest,
+  ) {
     if (!threadId) {
       // threadId 为undefined或者空字符串时，返回空数组
       return { messages: [] };
@@ -39,8 +44,13 @@ export class ChatController {
 
   // ─── 普通对话接口 ────────────────────────────────────────────────
   @Post()
-  async chat(@Body() body: ChatRequestBody) {
-    const { message, threadId, userId } = body;
+  @UseGuards(AuthGuard)
+  async chat(
+    @Body() body: ChatRequestBody,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const { message, threadId } = body;
+    const userId = req.user.userId;
 
     if (!message || typeof message !== 'string') {
       throw new BadRequestException({ error: 'message 字段不能为空' });
@@ -60,8 +70,14 @@ export class ChatController {
 
   // ─── 流式对话接口（SSE）─────────────────────────────────────────
   @Post('stream')
-  async stream(@Body() body: ChatRequestBody, @Res() res: Response): Promise<void> {
-    const { message, threadId, userId } = body;
+  @UseGuards(AuthGuard)
+  async stream(
+    @Body() body: ChatRequestBody,
+    @Req() req: AuthenticatedRequest,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { message, threadId } = body;
+    const userId = req.user.userId;
 
     if (!message || typeof message !== 'string') {
       res.status(400).json({ error: 'message 字段不能为空' });

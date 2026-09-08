@@ -4,6 +4,7 @@ import { PostgresStore } from '@langchain/langgraph-checkpoint-postgres/store';
 import { GraphController } from './graph.controller.ts';
 import { GraphService }   from './graph.service.ts';
 import { CHECKPOINTER }   from '../common/memory/memory.module.ts';
+import { AuthModule }     from '../common/auth/auth.module.ts';
 import type { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
 
 export const MEMORY_STORE = 'MEMORY_STORE';
@@ -19,6 +20,7 @@ const connString = () => {
 };
 
 @Module({
+  imports:     [AuthModule],
   controllers: [GraphController],
   providers:   [
     // 长期记忆：跨会话用户偏好（自建连接池，应用关闭时需要 stop()）

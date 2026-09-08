@@ -1,19 +1,7 @@
 // client/src/composables/useGraph.ts
 import { ref, nextTick } from 'vue';
+import { streamRequest } from '../utils/request.ts';
 import type { ToolStep } from '../types.ts';
-
-const API_BASE = 'http://localhost:3000/api';
-
-/** 长期记忆的用户标识：localStorage 持久化，跨会话（thread）不变 */
-const USER_ID_KEY = 'ecom_user_id';
-const getUserId = (): string => {
-  let id = localStorage.getItem(USER_ID_KEY);
-  if (!id) {
-    id = `U-${crypto.randomUUID().slice(0, 8)}`;
-    localStorage.setItem(USER_ID_KEY, id);
-  }
-  return id;
-};
 
 type ScrollCallback = () => void | Promise<void>;
 
@@ -58,9 +46,8 @@ export function useGraph() {
   const currentNode = ref('');
   const error       = ref('');
 
-  // 会话标识（短期记忆的 key）与用户标识（长期记忆的 key）
+  // 会话标识（短期记忆的 key）
   const threadId = ref<string>(crypto.randomUUID());
-  const userId   = ref<string>(getUserId());
 
   const sendMessage = async (userInput: string, scrollCallback?: ScrollCallback) => {
     if (!userInput.trim() || loading.value) return;
@@ -79,15 +66,10 @@ export function useGraph() {
     });
 
     try {
-      // 历史由服务端 checkpointer 按 threadId 管理，前端只传会话/用户标识
-      const response = await fetch(`${API_BASE}/graph/stream`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          message:  userInput,
-          threadId: threadId.value,
-          userId:   userId.value,
-        }),
+      // userId 从 token 解析，不在 body 里传
+      const response = await streamRequest('/graph/stream', {
+        message:  userInput,
+        threadId: threadId.value,
       });
 
       if (!response.body) throw new Error('响应没有内容');
@@ -165,13 +147,13 @@ export function useGraph() {
     messages.value    = [];
     currentNode.value = '';
     error.value       = '';
-    // 换新会话：threadId 重新生成（服务端短期记忆归零），userId 不变（长期记忆保留）
+    // 换新会话：threadId 重新生成（服务端短期记忆归零）
     threadId.value = crypto.randomUUID();
   };
 
   return {
     messages, loading, currentNode, error,
-    threadId, userId,
+    threadId,
     sendMessage, clearMessages,
   };
 }

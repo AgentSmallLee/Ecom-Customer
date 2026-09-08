@@ -1,8 +1,10 @@
 // server/src/rag/rag.controller.ts
 // POST /api/rag/query - 知识库问答（SSE 流式，带参考来源）
-import { Body, Controller, Inject, Post, Res } from '@nestjs/common';
+import { Body, Controller, Inject, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { RagService } from './rag.service.ts';
+import { AuthGuard } from '../common/auth/auth.guard.ts';
+import type { AuthenticatedRequest } from '../common/auth/request.interface.ts';
 
 /** RAG SSE 事件 */
 type RagSseEvent =
@@ -19,9 +21,11 @@ export class RagController {
   ) {}
 
   @Post('query')
+  @UseGuards(AuthGuard)
   async query(
     @Body() body: { question?: string },
-    @Res() res: Response
+    @Req() _req: AuthenticatedRequest,
+    @Res() res: Response,
   ): Promise<void> {
     const { question } = body;
 

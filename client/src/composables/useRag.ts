@@ -1,8 +1,7 @@
 // client/src/composables/useRag.ts
 import { ref } from 'vue';
+import { streamRequest } from '../utils/request.ts';
 import type { SourceInfo } from '../types.ts';
-
-const API_BASE = 'http://localhost:3000/api';
 
 type ScrollCallback = () => void | Promise<void>;
 
@@ -38,11 +37,8 @@ export function useRag() {
     messages.value.push({ role: 'assistant', content: '', sources: [], loading: true });
 
     try {
-      const response = await fetch(`${API_BASE}/rag/query`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ question }),
-      });
+      // RAG 知识库查询：登录态下调用，后端从 token 解析用户身份
+      const response = await streamRequest('/rag/query', { question });
 
       if (!response.body) throw new Error('响应没有内容');
       const reader  = response.body.getReader();

@@ -1,16 +1,17 @@
 // server/src/graph/graph.controller.ts
 // POST /api/graph/stream - LangGraph 工作流（SSE，带节点执行轨迹）
 // GET  /api/graph/history - 读取某会话的持久化状态（短期记忆验证/刷新恢复）
-import { Body, Controller, Get, Inject, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { Response } from 'express';
 import { GraphService } from './graph.service.ts';
+import { AuthGuard } from '../common/auth/auth.guard.ts';
+import type { AuthenticatedRequest } from '../common/auth/request.interface.ts';
 import type { GraphStateType } from '../graphs/state.ts';
 
 interface GraphRequestBody {
   message?: string;
   threadId?: string;
-  userId?: string;
 }
 
 @Controller('graph')
@@ -20,8 +21,14 @@ export class GraphController {
   ) {}
 
   @Post('stream')
-  async stream(@Body() body: GraphRequestBody, @Res() res: Response): Promise<void> {
-    const { message, threadId, userId } = body;
+  @UseGuards(AuthGuard)
+  async stream(
+    @Body() body: GraphRequestBody,
+    @Req() req: AuthenticatedRequest,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { message, threadId } = body;
+    const userId = req.user.userId;
 
     if (!message) {
       res.status(400).json({ error: 'message 不能为空' });
@@ -68,9 +75,11 @@ export class GraphController {
   }
 
   @Get('history')
+  @UseGuards(AuthGuard)
   async history(
     @Query('threadId') threadId: string | undefined,
-    @Res() res: Response
+    @Req() _req: AuthenticatedRequest,
+    @Res() res: Response,
   ): Promise<void> {
     if (!threadId) {
       res.status(400).json({ error: 'threadId 不能为空' });

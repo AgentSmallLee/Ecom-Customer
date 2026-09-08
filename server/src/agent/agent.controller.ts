@@ -1,15 +1,16 @@
 // server/src/agent/agent.controller.ts
 // GET  /api/agent/history - 获取会话历史（短期记忆，刷新恢复用）
 // POST /api/agent/stream - Agent 流式对话（SSE，token 级 + 工具步骤）
-import { Body, Controller, Get, Inject, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { Response } from 'express';
 import { AgentService } from './agent.service.ts';
+import { AuthGuard } from '../common/auth/auth.guard.ts';
+import type { AuthenticatedRequest } from '../common/auth/request.interface.ts';
 
 interface AgentRequestBody {
   message?: string;
   threadId?: string;
-  userId?: string;
 }
 
 /** Agent SSE 事件 */
@@ -29,14 +30,24 @@ export class AgentController {
 
   // ─── 获取会话历史 ────────────────────────────────────────────────
   @Get('history')
-  async history(@Query('threadId') threadId: string | undefined) {
+  @UseGuards(AuthGuard)
+  async history(
+    @Query('threadId') threadId: string | undefined,
+    @Req() _req: AuthenticatedRequest,
+  ) {
     if (!threadId) return { messages: [] };
     return this.agentService.getHistory(threadId);
   }
 
   @Post('stream')
-  async stream(@Body() body: AgentRequestBody, @Res() res: Response): Promise<void> {
-    const { message, threadId, userId } = body;
+  @UseGuards(AuthGuard)
+  async stream(
+    @Body() body: AgentRequestBody,
+    @Req() req: AuthenticatedRequest,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { message, threadId } = body;
+    const userId = req.user.userId;
 
     if (!message) {
       res.status(400).json({ error: 'message 不能为空' });
