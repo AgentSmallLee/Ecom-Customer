@@ -4,7 +4,18 @@ import { ref, onMounted, nextTick } from 'vue';
 import type { ToolStep } from '../types.ts';
 
 const API_BASE = 'http://localhost:3000/api';
-const STORAGE_KEY = 'agent_thread_id';
+const THREAD_STORAGE_KEY = 'agent_thread_id';
+const USER_STORAGE_KEY = 'agent_user_id';
+
+/** 获取/生成用户 ID（长期记忆标识，跨会话保留） */
+const getUserId = (): string => {
+  let id = localStorage.getItem(USER_STORAGE_KEY);
+  if (!id) {
+    id = `U-${crypto.randomUUID().slice(0, 8)}`;
+    localStorage.setItem(USER_STORAGE_KEY, id);
+  }
+  return id;
+};
 
 type ScrollCallback = () => void | Promise<void>;
 
@@ -31,10 +42,12 @@ export function useAgent() {
   const steps    = ref<ToolStep[]>([]);
   const error    = ref('');
   const threadId = ref('');
+  const userId   = ref('');
 
-  // ─── 初始化：从 localStorage 恢复 threadId，并拉取历史消息 ───
+  // ─── 初始化：生成 userId + 恢复 threadId，并拉取历史消息 ───
   onMounted(async () => {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    userId.value = getUserId();
+    const saved = localStorage.getItem(THREAD_STORAGE_KEY);
     if (saved) {
       threadId.value = saved;
       await loadHistory();
@@ -58,7 +71,7 @@ export function useAgent() {
       console.warn('[useAgent] 加载历史失败:', err);
       // 加载失败不影响使用，清空 threadId 重新开始
       threadId.value = '';
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(THREAD_STORAGE_KEY);
     }
   };
 
@@ -84,6 +97,7 @@ export function useAgent() {
         body:    JSON.stringify({
           message:  userInput,
           threadId: threadId.value || undefined,
+          userId:   userId.value,
         }),
       });
 
@@ -112,7 +126,7 @@ export function useAgent() {
             // 保存服务端返回的 threadId（新会话时返回）
             if (parsed.type === 'threadId' && parsed.threadId && parsed.threadId !== threadId.value) {
               threadId.value = parsed.threadId;
-              localStorage.setItem(STORAGE_KEY, parsed.threadId);
+              localStorage.setItem(THREAD_STORAGE_KEY, parsed.threadId);
             }
 
             if (parsed.type === 'token') {
@@ -193,8 +207,9 @@ export function useAgent() {
     messages.value = [];
     steps.value    = [];
     error.value    = '';
+    // 换新会话：threadId 重新生成（服务端短期记忆归零），userId 不变（长期记忆保留）
     threadId.value = '';
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(THREAD_STORAGE_KEY);
   };
 
   return {

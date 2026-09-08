@@ -15,7 +15,7 @@ export interface RagMessage {
 }
 
 interface RagStreamEvent {
-  type: 'sources' | 'answer' | 'error' | 'done';
+  type: 'sources' | 'token' | 'answer' | 'error' | 'done';
   sources?: SourceInfo[];
   content?: string;
 }
@@ -68,6 +68,18 @@ export function useRag() {
               };
             }
 
+            // 流式 token：追加到当前消息内容
+            if (parsed.type === 'token' && parsed.content) {
+              const current = messages.value[assistantIndex]!;
+              messages.value[assistantIndex] = {
+                ...current,
+                content: current.content + parsed.content,
+                loading: true,
+              };
+              scrollCallback?.();
+            }
+
+            // 最终完整回答：更新内容，loading 置为 false
             if (parsed.type === 'answer') {
               messages.value[assistantIndex] = {
                 role:    'assistant',

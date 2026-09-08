@@ -14,7 +14,7 @@ import {
   type LangGraphRunnableConfig,
 } from '@langchain/langgraph';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
-import { allTools } from '../tools/order-tools.ts';
+import { createOrderTools, getOrderInfoTool, getLogisticsTool } from '../tools/order-tools.ts';
 import { createModel } from '../models/deepseek.ts';
 
 const NAMESPACE = 'agent';
@@ -28,6 +28,7 @@ export type AgentStreamEvent =
 @Injectable()
 export class AgentService {
   private graph: ReturnType<typeof this.buildGraph>;
+  private baseModel = createModel({ temperature: 0, streaming: true });
 
   constructor(
     @Inject(CHECKPOINTER) private readonly checkpointer: BaseCheckpointSaver,
@@ -36,11 +37,15 @@ export class AgentService {
   }
 
   private buildGraph() {
-    const streamingModel = createModel({ temperature: 0, streaming: true }).bindTools(allTools);
-    const toolNode = new ToolNode(allTools);
+    // 工具节点用一组默认工具（不含用户绑定的 getUserOrders），
+    // 实际执行时 callModel / callTools 会根据当前 userId 动态切换工具
+    const defaultTools = [getOrderInfoTool, getLogisticsTool];
+    const defaultToolNode = new ToolNode(defaultTools);
 
+    // 路由函数，判断是否继续继续处理工具调用或结束流程
     const shouldContinue = (state: typeof MessagesAnnotation.State) => {
       const lastMessage = state.messages[state.messages.length - 1];
+      // 判断最后一条消息是否是 AI 消息且包含 tool调用
       if (lastMessage instanceof AIMessage && lastMessage.tool_calls?.length) {
         return 'tools';
       }
@@ -52,8 +57,14 @@ export class AgentService {
       state: typeof MessagesAnnotation.State,
       config: LangGraphRunnableConfig,
     ) => {
+      // 从 config 取出 userId，动态绑定带当前用户的工具
+      const userId = config?.configurable?.user_id as string | undefined;
+      const tools = createOrderTools(userId || '');
+      const modelWithTools = this.baseModel.bindTools(tools);
+
+      // 获取流式模型的输出流
       const writer = getWriter(config);
-      const stream = await streamingModel.stream(state.messages);
+      const stream = await modelWithTools.stream(state.messages);
 
       let content = '';
       // 用字符串暂存 args，流式场景下是逐段字符串拼起来的
@@ -108,11 +119,18 @@ export class AgentService {
       state: typeof MessagesAnnotation.State,
       config: LangGraphRunnableConfig,
     ) => {
-      const result = await toolNode.invoke(state);
+      // 从 config 取出 userId，用绑定了当前用户的工具执行
+      const userId = config?.configurable?.user_id as string | undefined;
+      const tools = createOrderTools(userId || '');
+      const toolNodeForUser = new ToolNode(tools);
+
+      // 执行工具调用
+      const result = await toolNodeForUser.invoke(state);
       const writer = getWriter(config);
 
       if (writer) {
         const toolMsgs = (result.messages || []) as ToolMessage[];
+        // 遍历工具调用结果，推送工具结束事件
         for (const tm of toolMsgs) {
           writer({
             type: 'tool_end',
@@ -123,7 +141,7 @@ export class AgentService {
           });
         }
       }
-
+      // 返回工具调用结果
       return result;
     };
 
@@ -141,8 +159,8 @@ export class AgentService {
   }
 
   /** 非流式调用（一次性返回） */
-  async invoke(message: string, threadId: string) {
-    const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId) } };
+  async invoke(message: string, threadId: string, userId?: string) {
+    const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId), user_id: userId } };
 
     const result = await this.graph.invoke(
       { messages: [new HumanMessage(message)] },
@@ -156,8 +174,8 @@ export class AgentService {
   }
 
   /** 流式调用：通过 custom 流推送 token + 工具步骤事件 */
-  async *stream(message: string, threadId: string): AsyncGenerator<AgentStreamEvent> {
-    const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId) } };
+  async *stream(message: string, threadId: string, userId?: string): AsyncGenerator<AgentStreamEvent> {
+    const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId), user_id: userId } };
 
     const stream = await this.graph.stream(
       { messages: [new HumanMessage(message)] },

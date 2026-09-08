@@ -9,6 +9,7 @@ import { AgentService } from './agent.service.ts';
 interface AgentRequestBody {
   message?: string;
   threadId?: string;
+  userId?: string;
 }
 
 /** Agent SSE 事件 */
@@ -35,7 +36,7 @@ export class AgentController {
 
   @Post('stream')
   async stream(@Body() body: AgentRequestBody, @Res() res: Response): Promise<void> {
-    const { message, threadId } = body;
+    const { message, threadId, userId } = body;
 
     if (!message) {
       res.status(400).json({ error: 'message 不能为空' });
@@ -56,7 +57,7 @@ export class AgentController {
       // 先把 threadId 发给前端
       send('threadId', { threadId: tid });
 
-      const stream = this.agentService.stream(message, tid);
+      const stream = this.agentService.stream(message, tid, userId);
 
       // 暂存工具调用信息，等 tool_end 时一起发 step 事件
       const pendingTools = new Map<string, { name: string; input: unknown }>();

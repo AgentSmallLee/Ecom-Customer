@@ -1,8 +1,16 @@
 // server/src/rag/rag.controller.ts
-// POST /api/rag/query - 知识库问答（SSE，带参考来源）
+// POST /api/rag/query - 知识库问答（SSE 流式，带参考来源）
 import { Body, Controller, Inject, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { RagService } from './rag.service.ts';
+
+/** RAG SSE 事件 */
+type RagSseEvent =
+  | { type: 'sources'; sources: { content: string; source: string }[] }
+  | { type: 'token'; content: string }
+  | { type: 'answer'; content: string }
+  | { type: 'done' }
+  | { type: 'error'; content: string };
 
 @Controller('rag')
 export class RagController {
@@ -27,17 +35,30 @@ export class RagController {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
 
-    const send = (type: string, data: Record<string, unknown>) =>
+    const send = (type: RagSseEvent['type'], data: Partial<RagSseEvent>) =>
       res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
 
     try {
-      const result = await this.ragService.query(question);
+      const stream = this.ragService.stream(question);
+      let fullAnswer = '';
+      let sourcesSent = false;
 
-      if (result.sources?.length) {
-        send('sources', { sources: result.sources });
+      for await (const chunk of stream) {
+        // 并行分支的 sources 在流结束前才会完整输出，遇到就发一次
+        if (chunk.sources?.length && !sourcesSent) {
+          send('sources', { sources: chunk.sources });
+          sourcesSent = true;
+        }
+
+        // answer 是流式输出的字符串片段，逐 token 推送
+        if (chunk.answer) {
+          fullAnswer += chunk.answer;
+          send('token', { content: chunk.answer });
+        }
       }
 
-      send('answer', { content: result.answer });
+      // 流结束，发送完整回答和结束标记
+      send('answer', { content: fullAnswer });
       send('done', {});
       res.end();
     } catch (err) {

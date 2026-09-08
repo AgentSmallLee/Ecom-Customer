@@ -20,7 +20,7 @@ const PG_CONFIG = {
 
 // 初始化 VectorStore（模块加载时执行一次）
 const vectorStore = await PGVectorStore.initialize(embeddings, PG_CONFIG);
-
+// 创建检索器，用于从向量存储中检索最相关的文档
 const retriever = vectorStore.asRetriever({ k: 4 });
 
 const ragPrompt = ChatPromptTemplate.fromMessages([
@@ -41,9 +41,13 @@ const ragPrompt = ChatPromptTemplate.fromMessages([
 const formatDocs = (docs: { pageContent: string }[]) =>
   docs.map((doc) => doc.pageContent).join('\n\n---\n\n');
 
+// 创建模型实例，用于生成回复
 const model = createModel({ temperature: 0 });
 
-// 标准 RAG Chain
+// 流式模型实例，用于 SSE 流式输出
+const streamingModel = createModel({ temperature: 0, streaming: true });
+
+// 标准 RAG Chain LCEL结合并行分支
 export const ragChain = RunnableSequence.from([
   {
     context:  (input: { question: string }) => retriever.pipe(formatDocs).invoke(input.question),
@@ -55,7 +59,12 @@ export const ragChain = RunnableSequence.from([
 ]);
 
 // 带来源信息的 RAG Chain
+// retriever.invoke(input.question) 从向量存储中检索最相关的文档，返回Document数组
+// formatDocs(input.docs) 格式化文档内容，返回字符串
+// ragChainWithSources 接收一个 { question: string } 输入，最终输出 { answer: string, sources: Array 
+// }——既有回答，又有回答依据的文档来源。
 export const ragChainWithSources = RunnableSequence.from([
+  // RunnablePassthrough.assign的作用是把输入的question透传到输入question到输出
   RunnablePassthrough.assign({ docs: (input: { question: string }) => retriever.invoke(input.question) }),
   {
     answer: RunnableSequence.from([
@@ -64,10 +73,11 @@ export const ragChainWithSources = RunnableSequence.from([
         question: input.question,
       }),
       ragPrompt,
-      model,
+      streamingModel,
       new StringOutputParser(),
     ]),
     sources: (input: { docs: { pageContent: string; metadata: { source: string } }[] }) =>
+      // input是document数组，每个document有pageContent和metadata，metadata有source字段
       input.docs.map((doc) => ({
         content: doc.pageContent.slice(0, 100) + '...',
         source:  doc.metadata.source,

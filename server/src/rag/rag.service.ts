@@ -18,4 +18,12 @@ export class RagService {
   query(question: string): Promise<RagResult> {
     return ragChainWithSources.invoke({ question }) as Promise<RagResult>;
   }
+
+  /** 流式查询：逐 token 返回 answer，sources 在流结束前返回 */
+  async *stream(question: string): AsyncIterable<RagResult> {
+    const stream = await ragChainWithSources.stream({ question });
+    for await (const chunk of stream as unknown as AsyncIterable<RagResult>) {
+      yield chunk;
+    }
+  }
 }

@@ -7,7 +7,18 @@ import { ref, onMounted, nextTick } from 'vue';
 import type { ChatMessage } from '../types.ts';
 
 const API_BASE = 'http://localhost:3000/api';
-const STORAGE_KEY = 'chat_thread_id';
+const THREAD_STORAGE_KEY = 'chat_thread_id';
+const USER_STORAGE_KEY = 'chat_user_id';
+
+/** 获取/生成用户 ID（长期记忆标识，跨会话保留） */
+const getUserId = (): string => {
+  let id = localStorage.getItem(USER_STORAGE_KEY);
+  if (!id) {
+    id = `U-${crypto.randomUUID().slice(0, 8)}`;
+    localStorage.setItem(USER_STORAGE_KEY, id);
+  }
+  return id;
+};
 
 type ScrollCallback = () => void | Promise<void>;
 
@@ -24,10 +35,12 @@ export function useChat() {
   const streamText = ref('');               // 当前流式输出的文本片段
   const error = ref('');                    // 错误信息
   const threadId = ref('');                 // 会话 ID（短期记忆标识）
+  const userId   = ref('');                 // 用户 ID（长期记忆标识）
 
-  // ─── 初始化：从 localStorage 恢复 threadId，并拉取历史消息 ───
+  // ─── 初始化：生成 userId + 恢复 threadId，并拉取历史消息 ───
   onMounted(async () => {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    userId.value = getUserId();
+    const saved = localStorage.getItem(THREAD_STORAGE_KEY);
     if (saved) {
       threadId.value = saved;
       await loadHistory();
@@ -49,7 +62,7 @@ export function useChat() {
       console.warn('[useChat] 加载历史失败:', err);
       // 加载失败不影响使用，清空 threadId 重新开始
       threadId.value = '';
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(THREAD_STORAGE_KEY);
     }
   };
 
@@ -71,6 +84,7 @@ export function useChat() {
         body: JSON.stringify({
           message:  userInput,
           threadId: threadId.value || undefined,
+          userId:   userId.value,
         }),
       });
 
@@ -97,7 +111,7 @@ export function useChat() {
             // 保存服务端返回的 threadId（新会话时返回）
             if (parsed.threadId && parsed.threadId !== threadId.value) {
               threadId.value = parsed.threadId;
-              localStorage.setItem(STORAGE_KEY, parsed.threadId);
+              localStorage.setItem(THREAD_STORAGE_KEY, parsed.threadId);
             }
 
             if (parsed.error) {
@@ -133,8 +147,9 @@ export function useChat() {
   const clearMessages = () => {
     messages.value = [];
     error.value = '';
+    // 换新会话：threadId 重新生成（服务端短期记忆归零），userId 不变（长期记忆保留）
     threadId.value = '';
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(THREAD_STORAGE_KEY);
   };
 
   return {

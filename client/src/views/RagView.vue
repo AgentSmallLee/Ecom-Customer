@@ -30,10 +30,13 @@
       >
         <div class="avatar-sm">{{ msg.role === 'user' ? '我' : '购' }}</div>
         <div class="message-content">
-          <div v-if="msg.loading" class="bubble loading-bubble">
+          <div v-if="msg.loading && !msg.content" class="bubble loading-bubble">
             <span class="dot" /><span class="dot" /><span class="dot" />
           </div>
-          <div v-else class="bubble">{{ msg.content }}</div>
+          <div v-else class="bubble">
+            {{ msg.content }}
+            <span v-if="msg.loading" class="cursor">▍</span>
+          </div>
           <div v-if="msg.sources && msg.sources.length" class="sources-wrap">
             <span class="sources-label">参考来源</span>
             <span v-for="(src, si) in msg.sources" :key="si" class="source-tag">
@@ -166,6 +169,16 @@ const handleQuick = (q: string) => {
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 .loading-bubble { display: flex; gap: 5px; align-items: center; min-width: 60px; }
+.cursor {
+  display: inline-block;
+  margin-left: 2px;
+  animation: cursor-blink 1s steps(2) infinite;
+  color: #94a3b8;
+}
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
 .dot {
   width: 7px; height: 7px; border-radius: 50%; background: #94a3b8;
   animation: dot-bounce 1.2s infinite;

@@ -36,27 +36,38 @@ export const getLogisticsTool = tool(
   }
 );
 
-export const getUserOrdersTool = tool(
-  async ({ userId }) => {
-    const userOrders = Object.values(orders).filter((o) => o.userId === userId);
-    if (userOrders.length === 0)
-      return JSON.stringify({ error: `用户 ${userId} 暂无订单` });
-    const summary = userOrders.map((o) => ({
-      orderId:    o.orderId,
-      status:     o.status,
-      amount:     o.amount,
-      createTime: o.createTime,
-    }));
-    return JSON.stringify(summary);
-  },
-  {
-    name: 'getUserOrders',
-    description:
-      '根据用户 ID 查询该用户的所有订单列表摘要。当用户询问"我有哪些订单"、"最近的订单"时调用。',
-    schema: z.object({
-      userId: z.string().describe('用户 ID，格式为 U-xxx，例如 U-100'),
-    }),
-  }
-);
+/**
+ * 工厂函数：根据 userId 创建"查询当前用户订单"的工具
+ * userId 由外部注入（来自 config.configurable.user_id），LLM 调用时不需要传 userId 参数
+ */
+export const createGetUserOrdersTool = (userId: string) =>
+  tool(
+    async () => {
+      const userOrders = Object.values(orders).filter((o) => o.userId === userId);
+      if (userOrders.length === 0)
+        return JSON.stringify({ error: `暂无订单记录` });
+      const summary = userOrders.map((o) => ({
+        orderId:    o.orderId,
+        status:     o.status,
+        amount:     o.amount,
+        createTime: o.createTime,
+      }));
+      return JSON.stringify(summary);
+    },
+    {
+      name: 'getUserOrders',
+      description:
+        '查询当前用户的所有订单列表摘要。当用户询问"我有哪些订单"、"我的订单"、"最近的订单"时调用。',
+      schema: z.object({}),
+    }
+  );
 
-export const allTools = [getOrderInfoTool, getLogisticsTool, getUserOrdersTool];
+/** 工厂函数：根据 userId 创建一整套订单工具（订单详情 + 物流 + 用户订单列表） */
+export const createOrderTools = (userId: string) => [
+  getOrderInfoTool,
+  getLogisticsTool,
+  createGetUserOrdersTool(userId),
+];
+
+// 保留默认导出（不带用户绑定，用于无需 userId 的场景）
+export const allTools = [getOrderInfoTool, getLogisticsTool];

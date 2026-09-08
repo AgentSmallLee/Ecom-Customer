@@ -11,6 +11,7 @@ import { ChatService } from './chat.service.ts';
 interface ChatRequestBody {
   message?: string;
   threadId?: string;
+  userId?: string;
 }
 
 @Controller('chat')
@@ -39,7 +40,7 @@ export class ChatController {
   // ─── 普通对话接口 ────────────────────────────────────────────────
   @Post()
   async chat(@Body() body: ChatRequestBody) {
-    const { message, threadId } = body;
+    const { message, threadId, userId } = body;
 
     if (!message || typeof message !== 'string') {
       throw new BadRequestException({ error: 'message 字段不能为空' });
@@ -49,7 +50,7 @@ export class ChatController {
     const tid = threadId || randomUUID();
 
     try {
-      const content = await this.chatService.chat(message, tid);
+      const content = await this.chatService.chat(message, tid, userId);
       return { content, threadId: tid };
     } catch (error) {
       console.error('[Chat Error]', error instanceof Error ? error.message : error);
@@ -60,7 +61,7 @@ export class ChatController {
   // ─── 流式对话接口（SSE）─────────────────────────────────────────
   @Post('stream')
   async stream(@Body() body: ChatRequestBody, @Res() res: Response): Promise<void> {
-    const { message, threadId } = body;
+    const { message, threadId, userId } = body;
 
     if (!message || typeof message !== 'string') {
       res.status(400).json({ error: 'message 字段不能为空' });
@@ -81,7 +82,7 @@ export class ChatController {
     };
 
     try {
-      const stream = this.chatService.stream(message, tid);
+      const stream = this.chatService.stream(message, tid, userId);
 
       // 先把 threadId 发给前端
       sendData({ threadId: tid });
