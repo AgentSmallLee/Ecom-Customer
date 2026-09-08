@@ -8,10 +8,7 @@
  */
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { createModel } from '../models/deepseek.ts';
-import {
-  customerServicePrompt,
-  generalChatPrompt,
-} from '../prompts/customer-service.ts';
+import { customerServicePrompt } from '../prompts/customer-service.ts';
 
 // ─── 红松心选客服 Chain（非流式）───────────────────────────────────
 const model = createModel({ temperature: 0.5 });
@@ -24,9 +21,6 @@ const streamingModel = createModel({ temperature: 0.5, streaming: true });
 
 export const customerServiceStreamChain =
   customerServicePrompt.pipe(streamingModel).pipe(parser);
-
-// ─── 通用对话 Chain（演示用）────────────────────────────────────
-export const generalChatChain = generalChatPrompt.pipe(model).pipe(parser);
 
 // ─── 工具函数：格式化历史消息 ────────────────────────────────────
 /** 前端传来的消息格式 */

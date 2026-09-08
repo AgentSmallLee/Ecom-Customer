@@ -40,7 +40,7 @@ export class GraphController {
       res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
 
     try {
-      const stream = await this.graphService.stream(message, tid, userId);
+      const stream = this.graphService.stream(message, tid, userId);
 
       for await (const update of stream) {
         const [nodeName, nodeState] =

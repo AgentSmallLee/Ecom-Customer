@@ -43,7 +43,7 @@ export default createRouter({
 
 用到的东西：
 - **`createRouter` + `createWebHistory`**：HTML5 History 模式（URL 是 `/agent` 而不是 `/#/agent`）。
-- **静态路由表**：4 条顶层路由，对应 4 个视图组件（基础对话 / 订单查询 / 知识库 / 智能中枢）。
+- **静态路由表**：4 条顶层路由，对应 4 个视图组件（基础对话 / 订单查询 / 商品咨询 / 智能客服）。
 - **`meta` 路由元信息**：每条的 `title` 用于后续路由守卫里设置页面标题（本项目只声明了 meta，未写守卫消费它）。
 - **`RouteMeta` 类型扩展（模块增强）**：
 
@@ -70,7 +70,7 @@ createApp(App).use(router).mount('#app');
   <router-link to="/">基础对话</router-link>
   <router-link to="/agent">订单查询</router-link>
   <router-link to="/rag">知识库</router-link>
-  <router-link to="/graph">智能中枢</router-link>
+  <router-link to="/graph">智能客服</router-link>
 </nav>
 <router-view />
 ```

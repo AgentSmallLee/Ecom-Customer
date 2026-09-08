@@ -6,8 +6,8 @@
       <div class="nav-links">
         <router-link to="/">基础对话</router-link>
         <router-link to="/agent">订单查询</router-link>
-        <router-link to="/rag">知识库</router-link>
-        <router-link to="/graph">智能中枢</router-link>
+        <router-link to="/rag">商品咨询</router-link>
+        <router-link to="/graph">智能客服</router-link>
       </div>
     </nav>
     <router-view />

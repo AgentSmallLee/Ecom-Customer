@@ -15,8 +15,8 @@ declare module 'vue-router' {
 const routes = [
   { path: '/',       component: ChatView,  meta: { title: '基础对话' } },
   { path: '/agent',  component: AgentView, meta: { title: 'Agent 订单查询' } },
-  { path: '/rag',    component: RagView,   meta: { title: '知识库问答' } },
-  { path: '/graph',  component: GraphView, meta: { title: '多 Agent 中枢' } },
+  { path: '/rag',    component: RagView,   meta: { title: '商品咨询' } },
+  { path: '/graph',  component: GraphView, meta: { title: '智能客服' } },
 ];
 
 export default createRouter({

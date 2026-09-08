@@ -1,0 +1,23 @@
+1. 多场景流式输出方案设计
+   - 分场景选用 streamMode：customer graph 用 updates 模式推送节点执行状态做轨迹可视化；Agent 用 custom 模式 + getWriter 手动推送，实现 token 级打字机效果
+   - Agent 工作流含模型调用 + 工具执行多轮循环，在单个 SSE 连接内同时实现打字机效果与工具调用步骤实时展示
+   - 解决了多节点下图执行过程不可见、用户等待焦虑的问题
+
+2. 长短时记忆分层设计
+   - 短期记忆：PostgresSaver Checkpointer 按 thread_id 持久化，刷新/重启不丢对话
+   - 长期记忆：PostgresStore 按用户命名空间存储，LLM 结构化提取偏好，跨会话召回注入
+   - 消息超阈值时自动裁剪（RemoveMessage）+ 摘要压缩，控制 Token 成本
+
+3. RAG 全链路工程化
+   - RecursiveCharacterTextSplitter 文档切分，pgvector 向量存储
+   - RunnableSequence 组装检索 + 生成链，返回答案来源引用
+   - 客服场景定向知识库召回，提升回答准确率
+
+4. LCEL 声明式链式调用
+   - Prompt → Model → OutputParser 管道语法串联，代码清晰可组合
+   - 统一支持 invoke / stream / batch，开箱即用的流式能力
+
+5. 前后端全栈贯通
+   - Vue3 Composition API + fetch ReadableStream 手写 SSE 解析
+   - 本地 threadId / userId 管理，配合服务端记忆实现刷新不丢、跨会话召回
+   - 四模块客服工作台（基础对话 / Agent / 知识库 / 图工作流）

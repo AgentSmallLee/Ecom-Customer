@@ -5,11 +5,7 @@
       <div class="header-left">
         <div class="avatar">购</div>
         <div>
-          <h1>红松心选智能客服中枢</h1>
-          <span class="subtitle">
-            {{ loading ? currentNode || '处理中...' : '多 Agent 协作模式' }}
-            · 记忆用户 {{ userId }}
-          </span>
+          <h1>红松心选智能客服</h1>
         </div>
       </div>
       <button @click="clearMessages">清空</button>
@@ -17,7 +13,7 @@
 
     <main class="messages-wrap" ref="messagesRef">
       <div v-if="messages.length === 0" class="welcome">
-        <p>您好，我是红松心选智能客服中枢。</p>
+        <p>您好，我是红松心选智能客服。</p>
         <p>我会自动判断您的问题类型，调用最合适的模块为您服务。</p>
         <div class="quick-btns">
           <button v-for="q in quickQuestions" :key="q" @click="handleQuick(q)">
@@ -89,7 +85,7 @@ import { ref, nextTick } from 'vue';
 import { useGraph, NODE_LABELS } from '../composables/useGraph.ts';
 import type { ToolStep } from '../types.ts';
 
-const { messages, loading, currentNode, error, userId, sendMessage, clearMessages } = useGraph();
+const { messages, loading, error, sendMessage, clearMessages } = useGraph();
 
 const inputText   = ref('');
 const messagesRef = ref<HTMLElement | null>(null);
@@ -148,7 +144,6 @@ const formatStepInput = (input: ToolStep['input']) => {
   display: flex; align-items: center; justify-content: center;
 }
 .header-left h1      { font-size: 16px; font-weight: 600; margin: 0; color: #1e293b; }
-.header-left .subtitle { font-size: 12px; color: #94a3b8; transition: color .2s; }
 .chat-header button {
   padding: 6px 14px; border-radius: 8px;
   border: 1px solid #e2e8f0; background: #fff;

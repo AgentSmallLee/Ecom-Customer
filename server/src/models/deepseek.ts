@@ -6,6 +6,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import 'dotenv/config';
 
+// 定义创建模型的选项接口
 interface CreateModelOptions {
   temperature?: number;
   streaming?: boolean;

@@ -1,12 +1,11 @@
 // server/src/graph/graph.module.ts
 import { Module, Inject, type OnApplicationShutdown } from '@nestjs/common';
-import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import { PostgresStore } from '@langchain/langgraph-checkpoint-postgres/store';
-import { pool } from '../db/postgres.ts';
 import { GraphController } from './graph.controller.ts';
 import { GraphService }   from './graph.service.ts';
+import { CHECKPOINTER }   from '../common/memory/memory.module.ts';
+import type { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
 
-export const MEMORY_SAVER = 'MEMORY_SAVER';
 export const MEMORY_STORE = 'MEMORY_STORE';
 
 /** 由 PG_* 环境变量拼出 PostgresStore 的连接串（该库需要自建连接池） */
@@ -22,30 +21,20 @@ const connString = () => {
 @Module({
   controllers: [GraphController],
   providers:   [
-    // 短期记忆：会话 checkpoint 持久化（复用全局 pg.Pool，不要调用 end()）
-    {
-      provide:    MEMORY_SAVER,
-      useFactory: async () => {
-        const saver = new PostgresSaver(pool);
-        await saver.setup(); // 幂等：创建 checkpoints / checkpoint_blobs / checkpoint_writes 等表
-        console.log('[memory] PostgresSaver 就绪（短期记忆）');
-        return saver;
-      },
-    },
     // 长期记忆：跨会话用户偏好（自建连接池，应用关闭时需要 stop()）
     {
       provide:    MEMORY_STORE,
       useFactory: async () => {
         const store = await PostgresStore.fromConnString(connString());
-        await store.setup(); // 幂等：创建 store / store_vectors 等表（依赖 pgvector）
+        await store.setup(); // 幂等：创建 store / store_vectors 表（依赖 pgvector）
         console.log('[memory] PostgresStore 就绪（长期记忆）');
         return store;
       },
     },
     {
       provide:    GraphService,
-      inject:     [MEMORY_SAVER, MEMORY_STORE],
-      useFactory: (checkpointer: PostgresSaver, store: PostgresStore) =>
+      inject:     [CHECKPOINTER, MEMORY_STORE],
+      useFactory: (checkpointer: BaseCheckpointSaver, store: PostgresStore) =>
         new GraphService(checkpointer, store),
     },
   ],

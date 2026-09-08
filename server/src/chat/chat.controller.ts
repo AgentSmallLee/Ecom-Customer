@@ -1,15 +1,16 @@
 // server/src/chat/chat.controller.ts
 // GET  /api/chat/health  - 健康检查
+// GET  /api/chat/history - 获取会话历史（短期记忆，刷新恢复用）
 // POST /api/chat        - 普通对话（一次性返回）
 // POST /api/chat/stream - 流式对话（SSE）
-import { BadRequestException, Body, Controller, Get, Inject, Post, Res } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Inject, Post, Query, Res } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import type { Response } from 'express';
 import { ChatService } from './chat.service.ts';
-import type { ChatMessage } from '../chains/basic-chat.ts';
 
 interface ChatRequestBody {
   message?: string;
-  history?: ChatMessage[];
+  threadId?: string;
 }
 
 @Controller('chat')
@@ -24,18 +25,32 @@ export class ChatController {
     return { status: 'ok', timestamp: new Date().toISOString() };
   }
 
+  // ─── 获取会话历史 ────────────────────────────────────────────────
+  @Get('history')
+  async history(@Query('threadId') threadId: string | undefined) {
+    if (!threadId) {
+      // threadId 为undefined或者空字符串时，返回空数组
+      return { messages: [] };
+    }
+    const messages = await this.chatService.getHistory(threadId);
+    return { messages };
+  }
+
   // ─── 普通对话接口 ────────────────────────────────────────────────
   @Post()
   async chat(@Body() body: ChatRequestBody) {
-    const { message, history = [] } = body;
+    const { message, threadId } = body;
 
     if (!message || typeof message !== 'string') {
       throw new BadRequestException({ error: 'message 字段不能为空' });
     }
 
+    // 没传 threadId 就生成一个新的（每次请求都是新会话）
+    const tid = threadId || randomUUID();
+
     try {
-      const content = await this.chatService.chat(message, history);
-      return { content };
+      const content = await this.chatService.chat(message, tid);
+      return { content, threadId: tid };
     } catch (error) {
       console.error('[Chat Error]', error instanceof Error ? error.message : error);
       throw new Error('服务暂时不可用，请稍后重试');
@@ -45,12 +60,14 @@ export class ChatController {
   // ─── 流式对话接口（SSE）─────────────────────────────────────────
   @Post('stream')
   async stream(@Body() body: ChatRequestBody, @Res() res: Response): Promise<void> {
-    const { message, history = [] } = body;
+    const { message, threadId } = body;
 
     if (!message || typeof message !== 'string') {
       res.status(400).json({ error: 'message 字段不能为空' });
       return;
     }
+
+    const tid = threadId || randomUUID();
 
     // 设置 SSE 响应头
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -64,7 +81,10 @@ export class ChatController {
     };
 
     try {
-      const stream = await this.chatService.stream(message, history);
+      const stream = this.chatService.stream(message, tid);
+
+      // 先把 threadId 发给前端
+      sendData({ threadId: tid });
 
       // 逐块发送给前端
       for await (const chunk of stream) {

@@ -11,9 +11,9 @@ import type { GraphStateType } from '../state.ts';
 const SUMMARY_THRESHOLD = parseInt(process.env.MEMORY_SUMMARY_THRESHOLD || '10');
 const KEEP_RECENT       = parseInt(process.env.MEMORY_KEEP_RECENT || '4');
 
-/** answerSynthesizer 之后条件路由：超阈值 → summarize，否则 → memoryWriter */
-export const shouldSummarize = (state: GraphStateType): 'summarize' | 'memoryWriter' =>
-  state.messages.length > SUMMARY_THRESHOLD ? 'summarize' : 'memoryWriter';
+/** answerSynthesizer 之后条件路由：超阈值 → summarize，否则 → end */
+export const shouldSummarize = (state: GraphStateType): 'summarize' | 'end' =>
+  state.messages.length > SUMMARY_THRESHOLD ? 'summarize' : 'end';
 
 const prompt = ChatPromptTemplate.fromMessages([
   [

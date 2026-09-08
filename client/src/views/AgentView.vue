@@ -5,7 +5,7 @@
       <div class="header-left">
         <div class="avatar">购</div>
         <div>
-          <h1>红松心选智能客服（Agent 模式）</h1>
+          <h1>红松心选智能客服</h1>
           <span :class="['status', { active: !loading }]">
             {{ loading ? '思考中...' : '在线' }}
           </span>
@@ -33,6 +33,11 @@
       >
         <div class="avatar-sm">{{ msg.role === 'user' ? '我' : '购' }}</div>
         <div class="message-content">
+          <!-- 思考内容（调用工具前 AI 说的话，灰色小字） -->
+          <div v-if="msg.thinkingContent" class="thinking-content">
+            {{ msg.thinkingContent }}
+          </div>
+          <!-- 工具步骤 -->
           <div v-if="msg.steps && msg.steps.length" class="steps-wrap">
             <div v-for="(step, si) in msg.steps" :key="si" class="step-item">
               <span class="step-label">调用工具</span>
@@ -40,31 +45,8 @@
               <span class="step-input">{{ formatInput(step.toolInput) }}</span>
             </div>
           </div>
-          <div v-if="msg.thinking" class="thinking">
-            <span class="dot-1">.</span>
-            <span class="dot-2">.</span>
-            <span class="dot-3">.</span>
-          </div>
-          <div v-else class="bubble">{{ msg.content }}</div>
-        </div>
-      </div>
-
-      <!-- 当前轮次实时步骤 -->
-      <div v-if="loading && steps.length" class="message-row assistant">
-        <div class="avatar-sm">购</div>
-        <div class="message-content">
-          <div class="steps-wrap">
-            <div v-for="(step, si) in steps" :key="si" class="step-item">
-              <span class="step-label">调用工具</span>
-              <span class="step-tool">{{ step.tool }}</span>
-              <span class="step-input">{{ formatInput(step.toolInput) }}</span>
-            </div>
-          </div>
-          <div class="thinking">
-            <span class="dot-1">.</span>
-            <span class="dot-2">.</span>
-            <span class="dot-3">.</span>
-          </div>
+          <!-- 最终答案 -->
+          <div v-if="msg.content" class="bubble">{{ msg.content }}</div>
         </div>
       </div>
 
@@ -212,6 +194,17 @@ const formatInput = (input: ToolStep['toolInput']) => {
 .step-label { color: #94a3b8; }
 .step-tool  { font-weight: 600; color: #2563eb; }
 .step-input { color: #64748b; }
+
+.thinking-content {
+  padding: 10px 14px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+  border-radius: 12px;
+  width: fit-content;
+  font-style: italic;
+}
 
 .thinking {
   display: flex; gap: 2px;

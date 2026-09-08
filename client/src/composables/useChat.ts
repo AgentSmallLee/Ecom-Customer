@@ -1,16 +1,18 @@
 /**
  * Vue3 Composable
- * useChat — 封装对话逻辑，包含流式输出、历史管理
+ * useChat — 封装对话逻辑，包含流式输出、短期记忆（threadId）
  * 在 View 组件中直接使用，保持组件简洁
  */
-import { ref, nextTick } from 'vue';
+import { ref, onMounted, nextTick } from 'vue';
 import type { ChatMessage } from '../types.ts';
 
 const API_BASE = 'http://localhost:3000/api';
+const STORAGE_KEY = 'chat_thread_id';
 
 type ScrollCallback = () => void | Promise<void>;
 
 interface StreamEventData {
+  threadId?: string;
   content?: string;
   error?: string;
   done?: boolean;
@@ -21,6 +23,35 @@ export function useChat() {
   const streaming = ref(false);             // 是否正在流式输出
   const streamText = ref('');               // 当前流式输出的文本片段
   const error = ref('');                    // 错误信息
+  const threadId = ref('');                 // 会话 ID（短期记忆标识）
+
+  // ─── 初始化：从 localStorage 恢复 threadId，并拉取历史消息 ───
+  onMounted(async () => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      threadId.value = saved;
+      await loadHistory();
+    }
+  });
+
+  // ─── 从服务端拉取历史消息（刷新恢复） ───
+  const loadHistory = async () => {
+    if (!threadId.value) return;
+    try {
+      const res = await fetch(`${API_BASE}/chat/history?threadId=${threadId.value}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.messages && Array.isArray(data.messages)) {
+        messages.value = data.messages;
+      }
+      console.warn('[useChat] 加载历史成功:', data);
+    } catch (err) {
+      console.warn('[useChat] 加载历史失败:', err);
+      // 加载失败不影响使用，清空 threadId 重新开始
+      threadId.value = '';
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  };
 
   // ─── 发送消息（流式）───────────────────────────────────────────
   const sendMessage = async (userInput: string, scrollCallback?: ScrollCallback) => {
@@ -34,15 +65,13 @@ export function useChat() {
     streamText.value = '';
 
     try {
-      // 取最近 10 条历史，避免 Token 超限
-      const history = messages.value
-        .slice(-10)
-        .map(({ role, content }) => ({ role, content }));
-
       const response = await fetch(`${API_BASE}/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userInput, history }),
+        body: JSON.stringify({
+          message:  userInput,
+          threadId: threadId.value || undefined,
+        }),
       });
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -61,8 +90,15 @@ export function useChat() {
 
         for (const line of lines) {
           const raw = line.slice(6).trim();
+          if (!raw) continue;
           try {
             const parsed = JSON.parse(raw) as StreamEventData;
+
+            // 保存服务端返回的 threadId（新会话时返回）
+            if (parsed.threadId && parsed.threadId !== threadId.value) {
+              threadId.value = parsed.threadId;
+              localStorage.setItem(STORAGE_KEY, parsed.threadId);
+            }
 
             if (parsed.error) {
               error.value = parsed.error;
@@ -97,6 +133,8 @@ export function useChat() {
   const clearMessages = () => {
     messages.value = [];
     error.value = '';
+    threadId.value = '';
+    localStorage.removeItem(STORAGE_KEY);
   };
 
   return {
@@ -104,7 +142,9 @@ export function useChat() {
     streaming,
     streamText,
     error,
+    threadId,
     sendMessage,
     clearMessages,
+    loadHistory,
   };
 }

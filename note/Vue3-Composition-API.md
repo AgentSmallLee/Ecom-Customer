@@ -49,7 +49,7 @@ const inputText = ref('');
 - `client/src/views/ChatView.vue:107` — 基础对话页
 - `client/src/views/AgentView.vue:93` — 订单查询页
 - `client/src/views/RagView.vue:68` — 知识库问答页
-- `client/src/views/GraphView.vue:87` — 智能中枢（多 Agent 工作流）页
+- `client/src/views/GraphView.vue:87` — 智能客服（全功能模式，多 Agent 工作流）页
 
 每个视图都是同一套模式：**模板里只用从 composable 解构出来的状态与方法，本地小状态用 `ref()` 声明**。
 例如 `ChatView.vue` 里 `inputText = ref('')`（输入框内容）、`messagesRef = ref<HTMLElement | null>(null)`（模板引用，配合 `nextTick` 做自动滚动）。
@@ -63,7 +63,7 @@ const inputText = ref('');
 | `composables/useChat.ts` | 基础对话：SSE 流式读取、消息历史管理（取最近 10 条防 token 超限） |
 | `composables/useAgent.ts` | 订单 Agent：流式、工具调用步骤（tool/input/observation）追踪 |
 | `composables/useRag.ts` | 知识库问答：流式、参考来源（sources）展示 |
-| `composables/useGraph.ts` | 智能中枢：Graph 工作流节点轨迹、意图识别、短期/长期记忆标识（threadId / userId） |
+| `composables/useGraph.ts` | 智能客服：Graph 工作流节点轨迹、意图识别、短期/长期记忆标识（threadId / userId） |
 
 典型结构（`useChat.ts` 的骨架）：
 

@@ -21,7 +21,7 @@ export const NODE_LABELS: Record<string, string> = {
   recallMemories:    '记忆召回',
   intentRouter:      '意图识别',
   orderAgent:        '订单查询',
-  ragNode:           '知识库检索',
+  ragNode:           '商品咨询',
   generalChat:       '通用对话',
   answerSynthesizer: '整理回答',
   summarize:         '历史压缩',
@@ -30,7 +30,7 @@ export const NODE_LABELS: Record<string, string> = {
 
 export const INTENT_LABELS: Record<string, string> = {
   order:     '订单查询',
-  knowledge: '知识库问答',
+  knowledge: '商品咨询',
   general:   '通用对话',
 };
 

@@ -35,6 +35,11 @@ declare global {
       PG_USER?: string;
       PG_PASSWORD?: string;
       PG_DATABASE?: string;
+
+      // 短期记忆最大对话轮数（chat/agent/graph 通用）
+      CHAT_MAX_ROUNDS?: string;
+      MEMORY_SUMMARY_THRESHOLD?: string;
+      MEMORY_KEEP_RECENT?: string;
     }
   }
 }

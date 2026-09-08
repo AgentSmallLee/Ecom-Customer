@@ -1,0 +1,19 @@
+1. 多场景流式输出方案设计
+   - 难点：不同图有不同的流式需求——customer graph 需要节点级轨迹展示（看每步执行状态），Agent 需要 token 级打字机效果 + 工具步骤实时推送；messages 模式在自定义节点内调用模型时捕获不到 token 流
+   - 解决方案：分场景选用 streamMode——customer graph 用 updates 模式推送节点状态做轨迹可视化；Agent 用 custom 模式 + getWriter 手动推送，在 agent 节点内流式生成时推 token，tool 节点前后推工具事件，单条 SSE 连接内同时实现打字机效果和步骤展示
+
+2. 长短时记忆的协同与边界控制
+   - 难点：短期记忆（对话历史）和长期记忆（用户偏好）如何协同工作？什么时候写入长期记忆？上下文窗口如何控制？
+   - 解决方案：短期记忆用 Checkpointer 按 thread_id 持久化，超过最大轮数自动裁剪（RemoveMessage）；长期记忆用 Store 按 user_id 存储，图执行完后异步 fire-and-forget 写入，不阻塞响应；下一轮对话时从 store 召回注入 prompt
+
+3. 消息裁剪的准确性
+   - 难点：Agent 场景下 messages 里混着 Human / AI / Tool 多种消息，简单按总条数裁剪会不准
+   - 解决方案：以 HumanMessage 数量计轮（一条 HumanMessage = 一轮对话开始），找到倒数第 N 条 HumanMessage 的位置，前面的所有消息全部删除，对简单对话和带工具的对话都适用
+
+4. 记忆持久化选型
+   - 难点：LangGraph 官方 checkpointer 有多种实现（Memory、File、Postgres 等），如何选择？
+   - 解决方案：开发环境用 MemorySaver 快速验证，生产环境用 PostgresSaver + PostgresStore，数据持久化、支持多实例部署、便于运维
+
+5. 前端 SSE 流式解析的健壮性
+   - 难点：SSE 数据可能分包到达（一个 SSE 事件拆成多个 TCP 包），直接按行解析会丢数据
+   - 解决方案：用 TextDecoder + 手动累积 buffer，按 `data: ` 前缀拆分事件，忽略解析失败的片段，保证流式输出的稳定性

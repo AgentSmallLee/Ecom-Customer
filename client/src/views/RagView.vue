@@ -5,7 +5,7 @@
       <div class="header-left">
         <div class="avatar">购</div>
         <div>
-          <h1>红松心选知识库问答</h1>
+          <h1>红松心选商品咨询</h1>
           <span class="subtitle">基于商品手册和售后政策</span>
         </div>
       </div>
