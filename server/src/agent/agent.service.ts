@@ -6,7 +6,6 @@ import { CHECKPOINTER } from '../common/memory/memory.module.ts';
 import { withNamespace, trimMessages, DEFAULT_MAX_ROUNDS } from '../common/memory/thread-utils.ts';
 import type { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
 import {
-  Annotation,
   MessagesAnnotation,
   StateGraph,
   START,
@@ -26,10 +25,6 @@ export type AgentStreamEvent =
   | { type: 'tool_start'; name: string; input: unknown }
   | { type: 'tool_end'; name: string; observation: string };
 
-const AgentState = Annotation.Root({
-  ...MessagesAnnotation.spec,
-});
-
 @Injectable()
 export class AgentService {
   private graph: ReturnType<typeof this.buildGraph>;
@@ -44,7 +39,7 @@ export class AgentService {
     const streamingModel = createModel({ temperature: 0, streaming: true }).bindTools(allTools);
     const toolNode = new ToolNode(allTools);
 
-    const shouldContinue = (state: typeof AgentState.State) => {
+    const shouldContinue = (state: typeof MessagesAnnotation.State) => {
       const lastMessage = state.messages[state.messages.length - 1];
       if (lastMessage instanceof AIMessage && lastMessage.tool_calls?.length) {
         return 'tools';
@@ -54,7 +49,7 @@ export class AgentService {
 
     // Agent 节点：流式生成 + 推送 token（通过 custom 流）
     const callModel = async (
-      state: typeof AgentState.State,
+      state: typeof MessagesAnnotation.State,
       config: LangGraphRunnableConfig,
     ) => {
       const writer = getWriter(config);
@@ -110,7 +105,7 @@ export class AgentService {
 
     // 工具节点：执行工具 + 推送工具结果事件
     const callTools = async (
-      state: typeof AgentState.State,
+      state: typeof MessagesAnnotation.State,
       config: LangGraphRunnableConfig,
     ) => {
       const result = await toolNode.invoke(state);
@@ -132,7 +127,7 @@ export class AgentService {
       return result;
     };
 
-    const workflow = new StateGraph(AgentState)
+    const workflow = new StateGraph(MessagesAnnotation)
       .addNode('agent', callModel)
       .addNode('tools', callTools)
       .addEdge(START, 'agent')
@@ -178,18 +173,6 @@ export class AgentService {
 
     // 轮次裁剪
     await this.trimIfNeeded(config);
-  }
-
-  /** 获取最终答案（从 state 里拿最后一条 AIMessage） */
-  async getFinalAnswer(threadId: string): Promise<string> {
-    const state = await this.graph.getState({
-      configurable: { thread_id: withNamespace(NAMESPACE, threadId) },
-    });
-    const messages = (state?.values?.messages || []) as BaseMessage[];
-    const lastAi = [...messages].reverse().find(
-      (m) => m._getType?.() === 'ai' && !(m as AIMessage).tool_calls?.length,
-    );
-    return lastAi && typeof lastAi.content === 'string' ? lastAi.content : '';
   }
 
   /** 消息数超最大轮数时，删除旧消息 */
