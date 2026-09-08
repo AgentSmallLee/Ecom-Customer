@@ -37,7 +37,6 @@
               <span class="node-name">{{ NODE_DISPLAY[node] || node }}</span>
               <span v-if="ni < msg.nodes.length - 1" class="arrow">→</span>
             </template>
-            <span v-if="msg.intent" class="intent-tag">{{ msg.intent }}</span>
           </div>
 
           <!-- 工具调用步骤 -->
@@ -193,11 +192,6 @@ const formatStepInput = (input: ToolStep['input']) => {
   border: 1px solid #ddd6fe;
 }
 .arrow { color: #cbd5e1; font-size: 10px; }
-.intent-tag {
-  padding: 2px 8px; border-radius: 4px;
-  background: #eff6ff; color: #2563eb;
-  border: 1px solid #bfdbfe; margin-left: 4px;
-}
 
 .steps-wrap { display: flex; flex-direction: column; gap: 3px; }
 .step-item {
