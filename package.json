@@ -1,0 +1,5 @@
+{
+	"dependencies": {
+		"@langchain/classic": "^1.0.46"
+	}
+}

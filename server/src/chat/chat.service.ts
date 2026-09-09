@@ -70,7 +70,7 @@ export class ChatService {
 
   /** 普通对话（一次性返回） */
   async chat(message: string, threadId: string, userId?: string): Promise<string> {
-    const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId), user_id: userId } };
+    const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId, userId), user_id: userId } };
 
     const result = await this.graph.invoke(
       { messages: [new HumanMessage(message)] },
@@ -89,7 +89,7 @@ export class ChatService {
 
   /** 流式对话：通过 graph.stream 执行，checkpointer 自动管理历史 */
   async *stream(message: string, threadId: string, userId?: string) {
-    const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId), user_id: userId } };
+    const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId, userId), user_id: userId } };
 
     // 走图执行：历史由 checkpointer 自动加载，结果自动写入 checkpoint
     // streamMode: 'custom' —— 节点内通过 streamWriter 推送 token 级流式输出
@@ -110,10 +110,10 @@ export class ChatService {
     await this.trimIfNeeded(config);
   }
 
-  /** 获取某会话的历史消息（用于刷新恢复） */
-  async getHistory(threadId: string): Promise<ChatMessage[]> {
+  /** 获取某会话的历史消息（带用户隔离，防止 IDOR 越权） */
+  async getHistory(threadId: string, userId?: string): Promise<ChatMessage[]> {
     const state = await this.graph.getState({
-      configurable: { thread_id: withNamespace(NAMESPACE, threadId) },
+      configurable: { thread_id: withNamespace(NAMESPACE, threadId, userId) },
     });
 
     const messages = (state?.values?.messages || []) as BaseMessage[];

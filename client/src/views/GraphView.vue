@@ -48,12 +48,14 @@
             </div>
           </div>
 
-          <!-- 加载中 -->
-          <div v-if="msg.loading" class="bubble loading-bubble">
+          <!-- 加载中且还没有内容时显示点点点 -->
+          <div v-if="msg.loading && !msg.content" class="bubble loading-bubble">
             <span class="dot" /><span class="dot" /><span class="dot" />
           </div>
-          <!-- 回答 -->
-          <div v-else class="bubble">{{ msg.content }}</div>
+          <!-- 有内容就显示（流式过程中也显示，带光标） -->
+          <div v-else-if="msg.content" class="bubble">
+            {{ msg.content }}<span v-if="msg.loading" class="cursor">|</span>
+          </div>
         </div>
       </div>
 
@@ -233,6 +235,19 @@ const formatStepInput = (input: ToolStep['input']) => {
 @keyframes bounce {
   0%, 80%, 100% { transform: translateY(0); opacity: .4; }
   40%           { transform: translateY(-5px); opacity: 1; }
+}
+
+.cursor {
+  display: inline-block;
+  width: 2px;
+  background: #7c3aed;
+  margin-left: 2px;
+  animation: blink 1s infinite;
+  align-self: center;
+}
+@keyframes blink {
+  0%, 50%  { opacity: 1; }
+  51%, 100% { opacity: 0; }
 }
 
 .error-tip {

@@ -32,13 +32,12 @@ export class ChatController {
   @UseGuards(AuthGuard)
   async history(
     @Query('threadId') threadId: string | undefined,
-    @Req() _req: AuthenticatedRequest,
+    @Req() req: AuthenticatedRequest,
   ) {
     if (!threadId) {
-      // threadId 为undefined或者空字符串时，返回空数组
       return { messages: [] };
     }
-    const messages = await this.chatService.getHistory(threadId);
+    const messages = await this.chatService.getHistory(threadId, req.user.userId);
     return { messages };
   }
 

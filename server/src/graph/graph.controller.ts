@@ -1,5 +1,5 @@
 // server/src/graph/graph.controller.ts
-// POST /api/graph/stream - LangGraph 工作流（SSE，带节点执行轨迹）
+// POST /api/graph/stream - LangGraph 工作流（SSE，节点轨迹 + token 级流式）
 // GET  /api/graph/history - 读取某会话的持久化状态（短期记忆验证/刷新恢复）
 import { Body, Controller, Get, Inject, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { randomUUID } from 'crypto';
@@ -7,7 +7,6 @@ import type { Response } from 'express';
 import { GraphService } from './graph.service.ts';
 import { AuthGuard } from '../common/auth/auth.guard.ts';
 import type { AuthenticatedRequest } from '../common/auth/request.interface.ts';
-import type { GraphStateType } from '../graphs/state.ts';
 
 interface GraphRequestBody {
   message?: string;
@@ -23,9 +22,9 @@ export class GraphController {
   @Post('stream')
   @UseGuards(AuthGuard)
   async stream(
-    @Body() body: GraphRequestBody,
-    @Req() req: AuthenticatedRequest,
-    @Res() res: Response,
+    @Body() body: GraphRequestBody, // 请求体
+    @Req() req: AuthenticatedRequest,// 请求对象，由 AuthGuard 挂载用户信息，确保已认证
+    @Res() res: Response, // 响应对象，用于发送 SSE 流式数据
   ): Promise<void> {
     const { message, threadId } = body;
     const userId = req.user.userId;
@@ -49,19 +48,25 @@ export class GraphController {
     try {
       const stream = this.graphService.stream(message, tid, userId);
 
-      for await (const update of stream) {
-        const [nodeName, nodeState] =
-          Object.entries(update as Record<string, Partial<GraphStateType>>)[0]!;
-        if (!nodeName) continue;
+      for await (const event of stream) {
+        if (event.kind === 'node') {
+          // 节点执行轨迹事件
+          const { node, state } = event;
+          send('node', { node, intent: state?.intent || null });
 
-        send('node', { node: nodeName, intent: nodeState?.intent || null });
+          if (state?.orderResult?.steps?.length) {
+            send('steps', { steps: state.orderResult.steps });
+          }
 
-        if (nodeState?.orderResult?.steps?.length) {
-          send('steps', { steps: nodeState.orderResult.steps });
-        }
-
-        if (nodeState?.finalAnswer) {
-          send('answer', { content: nodeState.finalAnswer });
+          if (state?.finalAnswer) {
+            send('answer', { content: state.finalAnswer });
+          }
+        } else if (event.kind === 'custom') {
+          // custom 流事件（token 等），直接透传 type 字段
+          const { type, ...rest } = event.data;
+          if (type) {
+            send(type as string, rest);
+          }
         }
       }
 
@@ -78,7 +83,7 @@ export class GraphController {
   @UseGuards(AuthGuard)
   async history(
     @Query('threadId') threadId: string | undefined,
-    @Req() _req: AuthenticatedRequest,
+    @Req() req: AuthenticatedRequest,
     @Res() res: Response,
   ): Promise<void> {
     if (!threadId) {
@@ -87,7 +92,7 @@ export class GraphController {
     }
 
     try {
-      const history = await this.graphService.getHistory(threadId);
+      const history = await this.graphService.getHistory(threadId, req.user.userId);
       if (!history) {
         res.json({ messages: [], summary: '' });
         return;

@@ -33,7 +33,7 @@ export interface GraphMessage {
 }
 
 interface GraphStreamEvent {
-  type: 'node' | 'steps' | 'answer' | 'error' | 'done';
+  type: 'node' | 'steps' | 'answer' | 'token' | 'answer_token' | 'error' | 'done';
   node?: string;
   intent?: string | null;
   steps?: ToolStep[];
@@ -110,6 +110,17 @@ export function useGraph() {
                 ...messages.value[assistantIndex]!,
                 steps: parsed.steps ?? [],
               };
+            }
+
+            // token 级流式输出（answerSynthesizer 节点逐 token 推送）
+            if (parsed.type === 'token' || parsed.type === 'answer_token') {
+              const msg = messages.value[assistantIndex]!;
+              messages.value[assistantIndex] = {
+                ...msg,
+                content: (msg.content || '') + (parsed.content || ''),
+              };
+              await nextTick();
+              scrollCallback?.();
             }
 
             if (parsed.type === 'answer') {

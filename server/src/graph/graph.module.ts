@@ -23,21 +23,24 @@ const connString = () => {
   imports:     [AuthModule],
   controllers: [GraphController],
   providers:   [
-    // 长期记忆：跨会话用户偏好（自建连接池，应用关闭时需要 stop()）
+    // ── Provider 1：长期记忆存储（PostgresStore） ──
+    // 注册一个名为 MEMORY_STORE 的自定义 Provider，用工厂函数异步创建实例
     {
-      provide:    MEMORY_STORE,
-      useFactory: async () => {
-        const store = await PostgresStore.fromConnString(connString());
-        await store.setup(); // 幂等：创建 store / store_vectors 表（依赖 pgvector）
+      provide:    MEMORY_STORE,          // 注入令牌：其他地方用 @Inject(MEMORY_STORE) 获取
+      useFactory: async () => {          // 工厂函数：Nest 启动时调用，返回值作为单例注入
+        const store = await PostgresStore.fromConnString(connString()); // 用连接串创建 PG 存储实例
+        await store.setup();             // 幂等初始化：建表 store / store_vectors（依赖 pgvector 扩展）
         console.log('[memory] PostgresStore 就绪（长期记忆）');
-        return store;
+        return store;                    // 返回实例，供 DI 容器作为单例复用
       },
     },
+    // ── Provider 2：图服务（GraphService） ──
+    // 工厂模式手动注入两个依赖，显式控制构造顺序
     {
-      provide:    GraphService,
-      inject:     [CHECKPOINTER, MEMORY_STORE],
+      provide:    GraphService,          // 注入令牌：类本身作为 Token（常规类 Provider 的写法）
+      inject:     [CHECKPOINTER, MEMORY_STORE], // 声明依赖：按顺序注入这两个 Provider
       useFactory: (checkpointer: BaseCheckpointSaver, store: PostgresStore) =>
-        new GraphService(checkpointer, store),
+        new GraphService(checkpointer, store),  // 工厂函数：拿到依赖后手动 new 实例
     },
   ],
   exports: [GraphService],

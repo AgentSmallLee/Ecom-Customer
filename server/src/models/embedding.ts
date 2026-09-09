@@ -21,4 +21,5 @@ export const embeddings = new OpenAIEmbeddings({
   configuration: {
     baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   },
+  batchSize:20 // 对齐
 });

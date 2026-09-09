@@ -69,6 +69,7 @@ export const ragNode = async (state: GraphStateType) => {
 
     // ── 3. 用改写后的问题检索 ──
     const result = await ragChain.invoke({ question: searchQuery });
+    console.log(`[ragNode] 检索结果：${result}`);
     return { ragResult: result };
   } catch (err) {
     console.error('[ragNode]', err instanceof Error ? err.message : err);

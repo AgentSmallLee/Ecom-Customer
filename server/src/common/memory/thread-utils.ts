@@ -4,11 +4,20 @@ import type { BaseMessage } from '@langchain/core/messages';
 import { RemoveMessage } from '@langchain/core/messages';
 
 /**
- * 给 threadId 加上命名空间前缀，避免不同模块的 threadId 冲突
- * 例：withNamespace('chat', 'abc123') → 'chat:abc123'
+ * 给 threadId 加上命名空间前缀，避免不同模块、不同用户的 threadId 冲突
+ * - 模块级隔离：不同模块用不同 namespace 前缀
+ * - 用户级隔离：userId 作为中间层，防止 IDOR 越权（A 用户不能读 B 用户的会话）
+ *
+ * 例：
+ *   withNamespace('chat', 'abc123')            → 'chat::abc123'（无用户）
+ *   withNamespace('chat', 'abc123', 'U-100')   → 'chat:U-100:abc123'
  */
-export const withNamespace = (namespace: string, threadId: string): string =>
-  `${namespace}:${threadId}`;
+export const withNamespace = (
+  namespace: string,
+  threadId: string,
+  userId?: string,
+): string =>
+  `${namespace}:${userId || ''}:${threadId}`;
 
 /**
  * 裁剪消息到最大轮数，返回 RemoveMessage 列表（用于从 checkpoint 删除旧消息）

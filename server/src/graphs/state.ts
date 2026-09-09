@@ -21,6 +21,7 @@ export const GraphState = Annotation.Root({
   ...MessagesAnnotation.spec,
 
   userInput: Annotation<string>({
+    // 第一个参数是当前状态，第二个参数是新值，这里的意思是直接用新值替换旧值
     reducer: (_, next) => next,
     default: () => '',
   }),

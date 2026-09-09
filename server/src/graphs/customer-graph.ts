@@ -1,6 +1,6 @@
 // server/src/graphs/customer-graph.ts
 import { StateGraph, START, END }          from '@langchain/langgraph';
-import type { BaseCheckpointSaver }        from '@langchain/langgraph-checkpoint';
+import type { BaseCheckpointSaver, BaseStore } from '@langchain/langgraph-checkpoint';
 import { GraphState }                      from './state.ts';
 import { intentRouterNode, routeByIntent } from './nodes/intent-router.ts';
 import { orderAgentNode }                  from './nodes/order-agent.ts';
@@ -13,12 +13,13 @@ import { summarizeNode, shouldSummarize }  from './nodes/summarize.ts';
 /**
  * 构建客服工作流图
  * @param checkpointer - 会话持久化（短期记忆，按 thread_id 隔离）
+ * @param store - 长期记忆存储（用户偏好跨会话召回与写入）
  *
  * 注：长期记忆（PostgresStore）的写入已从工作流中移出，改为 graph.service.ts
  *     中的异步副作用（fire-and-forget），避免阻塞用户收到最终答案。
  *     记忆召回（recallMemoriesNode）仍在图内，因为后续节点依赖它。
  */
-export const buildCustomerGraph = (checkpointer?: BaseCheckpointSaver) => {
+export const buildCustomerGraph = (checkpointer?: BaseCheckpointSaver, store?: BaseStore) => {
   const graph = new StateGraph(GraphState)
     .addNode('recallMemories',    recallMemoriesNode)
     .addNode('intentRouter',      intentRouterNode)
@@ -49,5 +50,5 @@ export const buildCustomerGraph = (checkpointer?: BaseCheckpointSaver) => {
     })
     .addEdge('summarize', END);
 
-  return graph.compile({ checkpointer });
+  return graph.compile({ checkpointer, store });
 };

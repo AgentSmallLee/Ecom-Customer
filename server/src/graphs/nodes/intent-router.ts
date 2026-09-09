@@ -21,13 +21,15 @@ const intentPrompt = ChatPromptTemplate.fromMessages([
   ['human', '{userInput}'],
 ]);
 
+// LCEL执行链
 const chain = intentPrompt.pipe(createModel({ temperature: 0 })).pipe(new StringOutputParser());
-
+// 有效的意图分类词
 const VALID_INTENTS = ['order', 'knowledge', 'general'];
-
+// 验证意图分类词是否有效
 const isValidIntent = (s: string): s is Intent =>
   (VALID_INTENTS as string[]).includes(s);
 
+// 节点函数
 export const intentRouterNode = async (state: GraphStateType) => {
   const { userInput, messages } = state;
 
@@ -36,11 +38,13 @@ export const intentRouterNode = async (state: GraphStateType) => {
   const input = recentDialogue
     ? `${userInput}\n\n（最近对话，供理解指代参考）\n${recentDialogue}`
     : userInput;
-
+  console.log('[intentRouter] 输入:', input);
   const raw    = await chain.invoke({ userInput: input });
   const intent = raw.trim().toLowerCase();
   const final  = isValidIntent(intent) ? intent : 'general';
   console.log(`[intentRouter] "${userInput}" → ${final}`);
+  // 更新状态中的意图分类词
+  state.intent = final as Intent;
   return { intent: final };
 };
 

@@ -11,10 +11,12 @@ import type { AuthenticatedUser } from './request.interface.ts';
 @Injectable()
 export class AuthGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
+    // 把上下文转为 HTTP 请求对象
     const request = context.switchToHttp().getRequest();
+    // 获取请求头对象的 Authorization 字段值,网络请求框架底层已经自动转小写了
     const authHeader = request.headers['authorization'];
+    // JWT_SECRET是在服务器动的时候，连接配置中心，获取到的，然后注入环境变量
     const secret = process.env.JWT_SECRET || 'ecom-customer-dev-secret';
-
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw new UnauthorizedException('请先登录');
     }

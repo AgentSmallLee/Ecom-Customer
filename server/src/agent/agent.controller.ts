@@ -33,10 +33,10 @@ export class AgentController {
   @UseGuards(AuthGuard)
   async history(
     @Query('threadId') threadId: string | undefined,
-    @Req() _req: AuthenticatedRequest,
+    @Req() req: AuthenticatedRequest,
   ) {
     if (!threadId) return { messages: [] };
-    return this.agentService.getHistory(threadId);
+    return this.agentService.getHistory(threadId, req.user.userId);
   }
 
   @Post('stream')
