@@ -8,6 +8,11 @@ import { createModel }         from '../models/deepseek.ts';
 import { embeddings }          from '../models/embedding.ts';
 import { pool }                from '../db/postgres.ts';
 
+// ── 混合检索配置 ──
+const HYBRID_K = 10;   // 每路召回数量（比最终 top-k 大，给 RRF 留融合空间）
+const FINAL_K  = 4;    // 融合后返回给 LLM 的文档数
+const RRF_K    = 60;   // RRF 公式常数，经验值 60
+
 const PG_CONFIG = {
   pool,
   tableName: 'knowledge_embeddings',
@@ -21,10 +26,104 @@ const PG_CONFIG = {
 
 // 初始化 VectorStore（模块加载时执行一次）
 const vectorStore = await PGVectorStore.initialize(embeddings, PG_CONFIG);
-// 创建检索器，用于从向量存储中检索最相关的文档
-// 按纯相似度返回 top-k，保证 LLM 拿到的都是最相关的内容
-// （展示层的来源去重在 sources 输出时处理，不影响检索质量）
-const retriever = vectorStore.asRetriever({ k: 4 });
+
+// ── 关键词检索（ILIKE 关键词匹配 + 命中率打分）──
+// 中文场景下最直接的关键词检索方式，无需分词、无需额外扩展
+// 打分规则：统计查询中的字符在 content 中命中的比例，命中率越高越相关
+async function keywordSearch(query: string, k: number): Promise<Document[]> {
+  // 提取查询中的有效字符（去重、去掉空格和标点）
+  const chars = [...new Set(query.replace(/[\s\p{P}]/gu, '').split(''))];
+  if (chars.length === 0) return [];
+
+  // 构建命中打分 SQL：每个字符命中得 1 分，总分 / 字符数 = 命中率
+  const scoreExpr = chars.map((_, i) =>
+    `CASE WHEN content ILIKE $${i + 1} THEN 1 ELSE 0 END`
+  ).join(' + ');
+
+  const params = chars.map((c) => `%${c}%`);
+  params.push(String(k));
+
+  const { rows } = await pool.query(
+    `SELECT id, content, metadata,
+            (${scoreExpr})::float / ${chars.length} AS rank
+     FROM knowledge_embeddings
+     WHERE (${scoreExpr}) > 0
+     ORDER BY rank DESC
+     LIMIT $${chars.length + 1}`,
+    [...params]
+  );
+
+  return rows.map(
+    (row) =>
+      new Document({
+        pageContent: row.content,
+        metadata:    row.metadata,
+      })
+  );
+}
+
+// ── 向量检索（pgvector 余弦相似度）──
+async function vectorSearch(query: string, k: number): Promise<Document[]> {
+  return vectorStore.similaritySearch(query, k);
+}
+
+// ── RRF（倒数排名融合）──
+// score(doc) = Σ 1 / (RRF_K + rank_i)
+// 排名越靠前分数越高，不需要关心两路分数的尺度差异
+function rrfFusion(
+  listA: Document[],
+  listB: Document[],
+  k: number
+): Document[] {
+  const scores = new Map<string, { score: number; doc: Document }>();
+
+  const addScore = (doc: Document, rank: number) => {
+    // 用 pageContent 作唯一标识（同一个 chunk 内容相同）
+    const key = doc.pageContent;
+    const existing = scores.get(key);
+    const score = 1 / (RRF_K + rank);
+    if (existing) {
+      existing.score += score;
+    } else {
+      scores.set(key, { score, doc });
+    }
+  };
+
+  listA.forEach((doc, i) => addScore(doc, i + 1));
+  listB.forEach((doc, i) => addScore(doc, i + 1));
+
+  return Array.from(scores.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, k)
+    .map((item) => item.doc);
+}
+
+// ── 混合检索入口 ──
+// 两路并行召回 → RRF 融合 → 返回 top-k
+async function hybridSearch(query: string): Promise<Document[]> {
+  const [vecResults, kwResults] = await Promise.all([
+    vectorSearch(query, HYBRID_K),
+    keywordSearch(query, HYBRID_K).catch((err) => {
+      // 关键词检索失败不影响主流程，兜底用空数组
+      console.warn('[hybridSearch] 关键词检索失败，退化为纯向量检索:', err.message);
+      return [];
+    }),
+  ]);
+
+  // 如果关键词检索没结果（用户输入都是停用词/无匹配），直接用向量结果
+  if (kwResults.length === 0) {
+    return vecResults.slice(0, FINAL_K);
+  }
+
+  const fused = rrfFusion(vecResults, kwResults, FINAL_K);
+  console.log(`[hybridSearch] 向量召回 ${vecResults.length} 条，关键词召回 ${kwResults.length} 条，融合后 ${fused.length} 条`);
+  return fused;
+}
+
+// 封装成可直接调用的检索函数（两条链都用它）
+const retriever = {
+  invoke: hybridSearch,
+};
 
 const ragPrompt = ChatPromptTemplate.fromMessages([
   [
@@ -76,7 +175,10 @@ const streamingModel = createModel({ temperature: 0, streaming: true });
 // 标准 RAG Chain LCEL结合并行分支
 export const ragChain = RunnableSequence.from([
   {
-    context:  (input: { question: string }) => retriever.pipe(formatDocs).invoke(input.question),
+    context:  async (input: { question: string }) => {
+      const docs = await retriever.invoke(input.question);
+      return formatDocs(docs);
+    },
     question: (input: { question: string }) => input.question,
   },
   ragPrompt,

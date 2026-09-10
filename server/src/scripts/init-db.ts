@@ -79,18 +79,37 @@ const init = async () => {
   const client = await dbPool.connect();
   try {
     await client.query('CREATE EXTENSION IF NOT EXISTS vector;');
-    console.log('  ✅ pgvector 扩展已就绪');
+    // pg_trgm：基于字符三元组的相似度检索，对中文支持好，无需分词
+    await client.query('CREATE EXTENSION IF NOT EXISTS pg_trgm;');
+    console.log('  ✅ pgvector + pg_trgm 扩展已就绪');
 
     console.log(`[3/4] 创建 knowledge_embeddings 表 ...`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS knowledge_embeddings (
-        id       bigserial PRIMARY KEY,
-        content  text,
-        metadata jsonb,
-        embedding vector(1024)
+        id           bigserial PRIMARY KEY,
+        content      text,
+        metadata     jsonb,
+        embedding    vector(1024),
+        content_tsv  tsvector GENERATED ALWAYS AS (to_tsvector('simple', content)) STORED
       );
     `);
-    console.log('  ✅ 表已就绪');
+    // pg_trgm GIN 索引（加速关键词模糊匹配，支持中文）
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS knowledge_embeddings_content_trgm_idx
+      ON knowledge_embeddings USING GIN (content gin_trgm_ops);
+    `);
+    // 全文检索 GIN 索引（保留，备用）
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS knowledge_embeddings_tsv_idx
+      ON knowledge_embeddings USING GIN (content_tsv);
+    `);
+    // 向量 HNSW 索引（加速余弦相似度检索）
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS knowledge_embeddings_embedding_idx
+      ON knowledge_embeddings
+      USING hnsw (embedding vector_cosine_ops);
+    `);
+    console.log('  ✅ 表已就绪（含全文检索列 + GIN 索引 + HNSW 向量索引）');
   } finally {
     client.release();
   }
@@ -105,7 +124,7 @@ const init = async () => {
 
   // 长期记忆：跨会话用户偏好（自建连接池，用完关闭）
   const connString = `postgres://${encodeURIComponent(PG_USER)}:${encodeURIComponent(PG_PASSWORD)}@${PG_HOST}:${PG_PORT}/${PG_DATABASE}`;
-  const store = await PostgresStore.fromConnString(connString);
+  const store = PostgresStore.fromConnString(connString);
   try {
     await store.setup();
     console.log('  ✅ store 表已就绪（store / store_vectors）');
