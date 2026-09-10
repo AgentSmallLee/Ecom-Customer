@@ -100,10 +100,14 @@ function rrfFusion(
 
 // ── 混合检索入口 ──
 // 两路并行召回 → RRF 融合 → 返回 top-k
-async function hybridSearch(query: string): Promise<Document[]> {
+// k 参数可选，默认用 FINAL_K（评测脚本可指定不同 k 值）
+async function hybridSearch(query: string, k: number = FINAL_K): Promise<Document[]> {
+  // 每路召回数量要比最终 k 大，给融合留空间
+  const recallK = Math.max(k * 3, HYBRID_K);
+
   const [vecResults, kwResults] = await Promise.all([
-    vectorSearch(query, HYBRID_K),
-    keywordSearch(query, HYBRID_K).catch((err) => {
+    vectorSearch(query, recallK),
+    keywordSearch(query, recallK).catch((err) => {
       // 关键词检索失败不影响主流程，兜底用空数组
       console.warn('[hybridSearch] 关键词检索失败，退化为纯向量检索:', err.message);
       return [];
@@ -112,11 +116,10 @@ async function hybridSearch(query: string): Promise<Document[]> {
 
   // 如果关键词检索没结果（用户输入都是停用词/无匹配），直接用向量结果
   if (kwResults.length === 0) {
-    return vecResults.slice(0, FINAL_K);
+    return vecResults.slice(0, k);
   }
 
-  const fused = rrfFusion(vecResults, kwResults, FINAL_K);
-  console.log(`[hybridSearch] 向量召回 ${vecResults.length} 条，关键词召回 ${kwResults.length} 条，融合后 ${fused.length} 条`);
+  const fused = rrfFusion(vecResults, kwResults, k);
   return fused;
 }
 
@@ -206,18 +209,15 @@ export const ragChainWithSources = RunnableSequence.from([
       new StringOutputParser(),
     ]),
     sources: (input: { docs: { pageContent: string; metadata: { source: string } }[] }) => {
-      // 按 source 去重，同一个来源只显示一次（取第一个匹配的）
-      const seen = new Set<string>();
-      return input.docs
-        .filter((doc) => {
-          if (seen.has(doc.metadata.source)) return false;
-          seen.add(doc.metadata.source);
-          return true;
-        })
-        .map((doc) => ({
-          content: doc.pageContent.slice(0, 100) + '...',
-          source:  doc.metadata.source,
-        }));
+      // 返回所有检索到的文档（完整内容，供评估、溯源等场景使用）
+      return input.docs.map((doc) => ({
+        content: doc.pageContent,
+        source:  doc.metadata.source,
+        metadata: doc.metadata,
+      }));
     },
   },
 ]);
+
+// ── 导出检索函数（供评测脚本等外部调用）──
+export { vectorSearch, keywordSearch, hybridSearch };

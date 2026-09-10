@@ -33,3 +33,4 @@ Thumbs.db
 # Cache
 .cache/
 .temp/
+server/src/evaluation/generation-result.json
