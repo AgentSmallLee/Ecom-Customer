@@ -1,4 +1,0 @@
-1.摘要压缩是同步还是异步的，为什么
-    summarizeNode（摘要压缩）还是同步的，因为它要修改 state 里的 messages 和 summary，必须写回 checkpointer
-  才能影响下一轮对话。这一步不能异步，否则下一轮对话读不到压缩后的状态
-2

@@ -34,3 +34,7 @@ Thumbs.db
 .cache/
 .temp/
 server/src/evaluation/generation-result.json
+
+# Personal
+面试/
+note/

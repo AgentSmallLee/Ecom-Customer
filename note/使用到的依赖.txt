@@ -1,2 +1,0 @@
-1.@langchain/openai
-2.dotenv
