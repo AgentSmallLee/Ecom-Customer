@@ -1,0 +1,16 @@
+1.安装
+    # Prisma CLI（开发依赖）
+    npm install prisma@latest --save-dev
+
+    # Prisma Client（运行时）
+    npm install @prisma/client@latest
+
+    # Prisma 7 必须安装的 PostgreSQL Driver Adapter（核心变化！）
+    # Prisma 7 移除了内置数据库驱动，必须手动安装 adapter
+    npm install @prisma/adapter-pg pg
+
+    # pg 的 TypeScript 类型定义
+    npm install @types/pg --save-dev
+2.初始化
+    npx prisma init --output ../src/generated/prisma
+2.

@@ -1,5 +1,7 @@
 // server/src/app.module.ts
 import { Module } from '@nestjs/common';
+import { LlmModule } from './llm/llm.module.js';
+import { PrismaModule } from './prisma/prisma.module.js';
 import { AppController }      from './app.controller.ts';
 import { MemoryModule }       from './common/memory/memory.module.ts';
 import { ChatModule }         from './chat/chat.module.ts';
@@ -33,6 +35,8 @@ import { GraphModule }        from './graph/graph.module.ts';
     AgentModule,
     RagModule,
     GraphModule,
+    LlmModule,
+    PrismaModule,
   ],
   controllers: [AppController],
 })

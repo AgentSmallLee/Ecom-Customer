@@ -1,0 +1,59 @@
+// prisma/schema.prisma
+
+// ─────────────────────────────────────────────────────────
+// generator 配置
+// Prisma 7 核心变化：
+//   provider 从 "prisma-client-js" 改为 "prisma-client"
+//   output 必须指定，生成到项目 src 目录下
+//   moduleFormat = "cjs" 是 NestJS 必须加的配置
+//     原因：Prisma 7 默认生成 ESM 格式，而 NestJS 使用 CommonJS
+//     不加这行会导致启动报错：Cannot use import statement in a module
+// ─────────────────────────────────────────────────────────
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+// ─────────────────────────────────────────────────────────
+// datasource 配置
+// Prisma 7 变化：url 移到 prisma.config.ts 里配置
+// 这里只保留 provider，不再写 url = env("DATABASE_URL")
+// ─────────────────────────────────────────────────────────
+datasource db {
+  provider = "postgresql"
+}
+
+// prisma/schema.prisma 末尾追加
+
+model LlmAuditLog {
+  id            String    @id @default(cuid())
+
+  // 调用来源
+  traceId       String?   // 请求链路 ID，关联同一次用户请求的多次 LLM 调用
+  source        String    // 来源接口，如 'simple-chat' / 'rag-query' / 'react-agent'
+
+  // 模型信息
+  model         String    // 实际使用的模型名，如 'qwen3.5:0.8b' / 'deepseek-chat'
+  provider      String    // 模型提供商，如 'ollama' / 'deepseek' / 'openai'
+  isFailover    Boolean   @default(false)   // 是否触发了降级
+
+  // 调用内容
+  promptPreview String?   // Prompt 前 500 字（不存全量，节省存储空间）
+  promptTokens  Int?      // 输入 Token 数
+  outputTokens  Int?      // 输出 Token 数
+  totalTokens   Int?      // 合计 Token 数
+
+  // 执行结果
+  status        String    // 'success' | 'error' | 'timeout'
+  latencyMs     Int       // 耗时（毫秒）
+  errorMessage  String?   // 失败时的错误信息（前 500 字）
+
+  createdAt     DateTime  @default(now())
+
+  @@index([source, createdAt])
+  @@index([model, createdAt])
+  @@index([status, createdAt])
+  @@index([traceId])
+  @@map("llm_audit_logs")
+}

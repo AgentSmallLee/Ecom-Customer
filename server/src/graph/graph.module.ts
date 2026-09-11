@@ -6,6 +6,7 @@ import { GraphService }   from './graph.service.ts';
 import { CHECKPOINTER }   from '../common/memory/memory.module.ts';
 import { AuthModule }     from '../common/auth/auth.module.ts';
 import type { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
+import { LlmModule } from '../llm/llm.module.ts';
 
 export const MEMORY_STORE = 'MEMORY_STORE';
 
@@ -20,7 +21,7 @@ const connString = () => {
 };
 
 @Module({
-  imports:     [AuthModule],
+  imports:     [AuthModule, LlmModule],
   controllers: [GraphController],
   providers:   [
     // ── Provider 1：长期记忆存储（PostgresStore） ──
