@@ -9,8 +9,8 @@
     "start": "tsx src/main.ts",
     "init-db": "tsx src/scripts/init-db.ts",
     "ingest": "tsx src/scripts/ingest.ts",
-    "eval-recall": "tsx src/scripts/eval-recall.ts",
-    "eval-precision": "tsx src/scripts/eval-precision.ts",
+    "eval-recall": "tsx src/evaluation/eval-recall.ts",
+    "eval-precision": "tsx src/evaluation/eval-precision.ts",
     "eval-generation": "tsx src/evaluation/eval-generation.ts",
     "typecheck": "tsc --noEmit"
   },
