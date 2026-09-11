@@ -67,7 +67,7 @@
    - 前端根据事件类型做不同的 UI 渲染：进入哪个节点、工具调用步骤、最终答案流式输出，体验更流畅
 
 4) Function Calling 的工程化封装
-   - 用 LangGraph 的 createReactAgent 驱动工具调用，tool() + zod schema 定义工具的入参类型
+   - 用 LangChain 的 createAgent 驱动工具调用，tool() + zod schema 定义工具的入参类型
    - temperature 设为 0 保证参数生成的精确性，避免 LLM 自由发挥导致工具调用失败
    - 从消息流中解析 tool_calls 中间步骤，通过 SSE 推给前端展示，提升用户信任感
 
@@ -144,7 +144,7 @@ updates 模式刚好是节点级的输出，每个节点执行完推一次，我
 
 3) agent 模块 —— 和 chat 类似，前端传 history
    独立的 ReAct Agent 接口，也是接收前端传的 history 数组，
-   转成 messages 传给 createReactAgent。同样是前端维护历史，服务端不存。
+   转成 messages 传给 createAgent。同样是前端维护历史，服务端不存。
 
 4) rag 模块 —— 完全无状态，没有记忆
    定位就是独立的知识库查询接口，每次只接收一个 question 参数，纯单轮检索。

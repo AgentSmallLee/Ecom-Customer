@@ -84,7 +84,7 @@ const workflow = new StateGraph(MessagesAnnotation)
 
 ```ts
 // src/graphs/nodes/order-agent.ts
-// 使用 langchain 包的 createAgent（替代已废弃的 @langchain/langgraph/prebuilt/createReactAgent）
+// 使用 langchain 包的 createAgent（封装好的 ReAct Agent）
 const agentApp = createAgent({
   model,
   tools,
@@ -95,8 +95,8 @@ const result = await agentApp.invoke({ messages: inputMessages });
 // ↑ 内部自动循环：思考 → 调工具 → 看结果 → 再思考 → ... → 最终回答
 ```
 
-> **迁移说明**：`createReactAgent` 已废弃，迁移到 `langchain` 包的 `createAgent`。
-> 参数映射：`llm` → `model`，`prompt` → `systemPrompt`，输入输出格式完全兼容。
+> **说明**：`createAgent` 来自 `langchain` 包，是封装好的 ReAct Agent。
+> 主要参数：`model`、`tools`、`systemPrompt`，输入输出为 messages 格式。
 
 ---
 

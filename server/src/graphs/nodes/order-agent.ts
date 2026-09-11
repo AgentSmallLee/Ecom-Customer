@@ -1,8 +1,7 @@
 // server/src/graphs/nodes/order-agent.ts
 // 订单查询子 Agent：由意图路由分发到本节点，调用订单工具查询数据后返回。
 //
-// 注意：使用 langchain 包的 createAgent（替代已废弃的 @langchain/langgraph/prebuilt/createReactAgent）。
-//       参数映射：llm → model，prompt → systemPrompt。
+// 使用 langchain 包的 createAgent，参数：model、tools、systemPrompt。
 import { createAgent } from 'langchain';
 import { HumanMessage, AIMessage } from '@langchain/core/messages';
 import type { LangGraphRunnableConfig } from '@langchain/langgraph';
@@ -29,7 +28,6 @@ export const orderAgentNode = async (
   const tools = createOrderTools(userId || '');
 
   // 动态创建 agent（每次调用都用绑定了当前用户的工具）
-  // createAgent 替代已废弃的 createReactAgent，参数名：llm→model, prompt→systemPrompt
   const agentApp = createAgent({
     model,
     tools,
@@ -63,7 +61,7 @@ export const orderAgentNode = async (
     : [new HumanMessage(userInput)];
 
   try {
-    // createAgent 返回 ReactAgent 实例，invoke 入参和返回结构与 createReactAgent 兼容
+    // createAgent 返回 agent 实例，invoke 入参为 { messages }，返回带 messages 的结果
     const result = await agentApp.invoke({ messages: inputMessages });
 
     // 从消息列表提取工具调用步骤
