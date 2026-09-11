@@ -16,7 +16,7 @@
 //   和准确率的区别：准确率怕掺假（回来的有多少是对的），召回率怕漏掉（该回来的回来了多少）。
 //
 // 命中判断标准：
-//   top-K 结果中至少有一个 chunk 包含任意一个 expectedKeywords 就算命中
+//   用 LLM 语义判断 top-K 结果能否回答这个问题（纯问题 + 上下文，不依赖答案要点）
 //   无答案问题：一条都没召回才算命中（说明检索系统没乱召回）
 
 import { readFileSync } from 'fs';
@@ -24,9 +24,10 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { vectorSearch, keywordSearch, hybridSearch } from '../chains/rag-chain.ts';
 import { pool } from '../db/postgres.ts';
+import { LlmService } from '../llm/llm.service.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const EVAL_FILE = join(__dirname, '../data/eval/eval-set.json');
+const EVAL_FILE = join(__dirname, './eval-set.json');
 
 // 支持的检索模式
 type Mode = 'vector' | 'keyword' | 'hybrid';
@@ -35,7 +36,7 @@ type Mode = 'vector' | 'keyword' | 'hybrid';
 interface EvalItem {
   question: string;          // 用户问题
   category: 'product' | 'policy' | 'none'; // 问题分类，用于分类统计
-  expectedKeywords: string[]; // 预期关键词，只要 top-K 中有一个 chunk 包含任意一个关键词就算命中
+  answerKeywords: string[];   // 答案要点（生成质量评估用，召回评估不依赖）
 }
 
 // ────────────────────────────────────────────
@@ -97,24 +98,56 @@ async function searchByMode(query: string, mode: Mode, k: number) {
   }
 }
 
+// LLM 服务实例（用于语义判断召回是否命中）
+const llm = new LlmService();
+
 // ────────────────────────────────────────────
-// 判断是否命中（召回率判断标准）
+// 判断是否命中（召回率判断标准 — LLM 语义评估版）
 // ────────────────────────────────────────────
-// 命中条件：top-K 结果中至少有一个 chunk 包含任意一个 expectedKeywords
-// 用关键词匹配法判断命中，简单直接，不用人工标注完整答案片段。
+// 用 LLM 判断检索到的 top-K 个 chunk，从语义上看能不能回答这个问题。
+//
+// 为什么不用关键词匹配了？
+//   关键词匹配太粗：
+//     · 假阳性：chunk 里有关键词但说的是另一件事
+//     · 假阴性：chunk 说的是对的但措辞不一样，关键词匹配不上
+//   LLM 做语义判断更准确，更接近真实的召回效果。
 //
 // 无答案问题的特殊处理：
 //   一条结果都没召回才算命中——说明检索系统知道这道题它不会，没乱答。
 //   召回了任何东西 = 没命中 = 乱召回了。
-function isHit(docs: { pageContent: string }[], expectedKeywords: string[]): boolean {
+async function isHitLLM(
+  question: string,
+  docs: { pageContent: string }[],
+  category: string,
+): Promise<boolean> {
   // 无答案问题：没有任何匹配就是命中（说明检索没有乱召回）
-  if (expectedKeywords.length === 0) {
+  if (category === 'none') {
     return docs.length === 0;
   }
-  // 有答案问题：只要有一个 chunk 包含任意一个关键词就算命中
-  return docs.some(doc =>
-    expectedKeywords.some(kw => doc.pageContent.includes(kw))
-  );
+  // 有答案问题但一条没检索到 → 肯定没命中
+  if (docs.length === 0) {
+    return false;
+  }
+
+  // 把检索到的上下文拼起来
+  const contextText = docs.map((d, i) => `[${i + 1}] ${d.pageContent}`).join('\n---\n');
+
+  const prompt = `你是一个检索质量评估员。请判断以下检索到的上下文片段，从语义上是否包含了回答这个问题所需的关键信息。
+
+【问题】
+${question}
+
+【检索到的上下文】
+${contextText}
+
+判断标准：
+- 只要上下文中包含了回答问题所需的主要信息（语义一致即可，不要求措辞完全一样），就算命中
+- 如果上下文完全不相关，或者缺少回答问题的关键信息，就算没命中
+
+请只输出 yes 或 no，不要输出其他任何文字。`;
+
+  const raw = await llm.predict(prompt);
+  return raw.trim().toLowerCase().startsWith('yes');
 }
 
 // ────────────────────────────────────────────
@@ -162,16 +195,16 @@ async function evaluateMode(evalSet: EvalItem[], mode: Mode, ks: number[]) {
     const item = evalSet[i];
 
     // 打印进度，比如 [12/49] 蓝牙耳机多少钱 ... ✓@1 ✓@3 ✗@5
-    process.stdout.write(`  [${i + 1}/${evalSet.length}] ${item.question} ... `);
+    process.stdout.write(`  [${i + 1}/${evalSet.length}] ${item.question.slice(0, 20)}... `);
 
     // 只调一次检索，拿 maxK 条结果
     const docs = await searchByMode(item.question, mode, maxK);
 
-    // 对每个 K 值分别判断是否命中
+    // 对每个 K 值分别用 LLM 判断是否命中
     let hitStr = '';
     for (const k of ks) {
       const topK = docs.slice(0, k); // 小 K 直接从 maxK 结果里截前 N 条
-      const hit = isHit(topK, item.expectedKeywords);
+      const hit = await isHitLLM(item.question, topK, item.category);
       hitsByK[k].push(hit ? 1 : 0);
       catHits[item.category][k].push(hit ? 1 : 0);
       hitStr += (hit ? '✓' : '✗') + `@${k} `;
@@ -215,7 +248,7 @@ async function main() {
   console.log(`  评测集：${evalSet.length} 个问题`);
   console.log(`  K 值：${ks.join(', ')}`);
   console.log(`  模式：${mode}`);
-  console.log(`  命中标准：top-K 中任一 chunk 包含任一 expectedKeywords 即为命中`);
+  console.log(`  命中标准：LLM 语义判断 top-K 上下文能否回答问题（纯问题 + 上下文）`);
 
   if (mode === 'all') {
     // 三种模式都跑，方便对比

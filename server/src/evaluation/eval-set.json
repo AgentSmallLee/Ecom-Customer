@@ -2,10 +2,6 @@
   {
     "question": "蓝牙耳机多少钱",
     "category": "product",
-    "expectedSource": "蓝牙耳机 X1 Pro",
-    "expectedKeywords": [
-      "899"
-    ],
     "answerKeywords": [
       "价格 899 元",
       "产品名 蓝牙耳机 X1 Pro"
@@ -14,10 +10,6 @@
   {
     "question": "蓝牙耳机续航多久",
     "category": "product",
-    "expectedSource": "蓝牙耳机 X1 Pro",
-    "expectedKeywords": [
-      "30 小时"
-    ],
     "answerKeywords": [
       "续航 30 小时",
       "产品名 蓝牙耳机 X1 Pro"
@@ -26,10 +18,6 @@
   {
     "question": "耳机降噪效果怎么样",
     "category": "product",
-    "expectedSource": "蓝牙耳机 X1 Pro",
-    "expectedKeywords": [
-      "主动降噪"
-    ],
     "answerKeywords": [
       "主动降噪",
       "产品名 蓝牙耳机 X1 Pro"
@@ -38,10 +26,6 @@
   {
     "question": "机械键盘K200价格",
     "category": "product",
-    "expectedSource": "机械键盘 K200",
-    "expectedKeywords": [
-      "1299"
-    ],
     "answerKeywords": [
       "价格 1299 元",
       "产品名 机械键盘 K200"
@@ -50,10 +34,6 @@
   {
     "question": "机械键盘有什么轴",
     "category": "product",
-    "expectedSource": "机械键盘 K200",
-    "expectedKeywords": [
-      "青轴"
-    ],
     "answerKeywords": [
       "青轴、红轴、茶轴",
       "产品名 机械键盘 K200"
@@ -62,10 +42,6 @@
   {
     "question": "K200键盘是多少键的",
     "category": "product",
-    "expectedSource": "机械键盘 K200",
-    "expectedKeywords": [
-      "87 键"
-    ],
     "answerKeywords": [
       "87 键",
       "产品名 机械键盘 K200"
@@ -74,10 +50,6 @@
   {
     "question": "iPhone15手机壳多少钱",
     "category": "product",
-    "expectedSource": "iPhone 手机壳",
-    "expectedKeywords": [
-      "49.5"
-    ],
     "answerKeywords": [
       "价格 49.5 元",
       "产品名 iPhone 手机壳"
@@ -86,10 +58,6 @@
   {
     "question": "手机壳支持磁吸充电吗",
     "category": "product",
-    "expectedSource": "iPhone 手机壳",
-    "expectedKeywords": [
-      "MagSafe"
-    ],
     "answerKeywords": [
       "MagSafe 磁吸充电",
       "产品名 iPhone 手机壳"
@@ -98,10 +66,6 @@
   {
     "question": "智能手表S2能测心率吗",
     "category": "product",
-    "expectedSource": "智能手表 S2",
-    "expectedKeywords": [
-      "心率监测"
-    ],
     "answerKeywords": [
       "心率监测",
       "产品名 智能手表 S2"
@@ -110,10 +74,6 @@
   {
     "question": "智能手表防水吗",
     "category": "product",
-    "expectedSource": "智能手表 S2",
-    "expectedKeywords": [
-      "5ATM"
-    ],
     "answerKeywords": [
       "5ATM 防水",
       "产品名 智能手表 S2"
@@ -122,10 +82,6 @@
   {
     "question": "手表续航怎么样",
     "category": "product",
-    "expectedSource": "智能手表 S2",
-    "expectedKeywords": [
-      "7 天"
-    ],
     "answerKeywords": [
       "续航 7 天",
       "产品名 智能手表 S2"
@@ -134,10 +90,6 @@
   {
     "question": "无线充电器多少瓦",
     "category": "product",
-    "expectedSource": "无线充电器",
-    "expectedKeywords": [
-      "15W"
-    ],
     "answerKeywords": [
       "功率 15W",
       "产品名 无线充电器"
@@ -146,10 +98,6 @@
   {
     "question": "充电宝容量多大",
     "category": "product",
-    "expectedSource": "充电宝",
-    "expectedKeywords": [
-      "20000mAh"
-    ],
     "answerKeywords": [
       "容量 20000mAh",
       "产品名 充电宝"
@@ -158,10 +106,6 @@
   {
     "question": "充电宝能带上飞机吗",
     "category": "product",
-    "expectedSource": "充电宝",
-    "expectedKeywords": [
-      "可上飞机"
-    ],
     "answerKeywords": [
       "可上飞机",
       "产品名 充电宝"
@@ -170,10 +114,6 @@
   {
     "question": "人体工学椅多少钱",
     "category": "product",
-    "expectedSource": "人体工学椅",
-    "expectedKeywords": [
-      "1899"
-    ],
     "answerKeywords": [
       "价格 1899 元",
       "产品名 人体工学椅"
@@ -182,10 +122,6 @@
   {
     "question": "升降桌最大升多高",
     "category": "product",
-    "expectedSource": "电动升降桌",
-    "expectedKeywords": [
-      "120cm"
-    ],
     "answerKeywords": [
       "最大高度 120cm",
       "产品名 电动升降桌"
@@ -194,10 +130,6 @@
   {
     "question": "空气炸锅容量多大",
     "category": "product",
-    "expectedSource": "空气炸锅",
-    "expectedKeywords": [
-      "5L"
-    ],
     "answerKeywords": [
       "容量 5L",
       "产品名 空气炸锅"
@@ -206,10 +138,6 @@
   {
     "question": "电饭煲几升的",
     "category": "product",
-    "expectedSource": "电饭煲",
-    "expectedKeywords": [
-      "4L"
-    ],
     "answerKeywords": [
       "容量 4L",
       "产品名 电饭煲"
@@ -218,10 +146,6 @@
   {
     "question": "扫地机器人吸力多大",
     "category": "product",
-    "expectedSource": "扫地机器人",
-    "expectedKeywords": [
-      "5000Pa"
-    ],
     "answerKeywords": [
       "吸力 5000Pa",
       "产品名 扫地机器人"
@@ -230,10 +154,6 @@
   {
     "question": "电动牙刷用什么电池",
     "category": "product",
-    "expectedSource": "电动牙刷",
-    "expectedKeywords": [
-      "充一次用 30 天"
-    ],
     "answerKeywords": [
       "充一次用 30 天",
       "产品名 电动牙刷"
@@ -242,10 +162,6 @@
   {
     "question": "吹风机功率多大",
     "category": "product",
-    "expectedSource": "吹风机",
-    "expectedKeywords": [
-      "1600W"
-    ],
     "answerKeywords": [
       "功率 1600W",
       "产品名 吹风机"
@@ -254,10 +170,6 @@
   {
     "question": "剃须刀防水吗",
     "category": "product",
-    "expectedSource": "剃须刀",
-    "expectedKeywords": [
-      "全身水洗"
-    ],
     "answerKeywords": [
       "全身水洗",
       "产品名 剃须刀"
@@ -266,10 +178,6 @@
   {
     "question": "保温杯能保温多久",
     "category": "product",
-    "expectedSource": "保温杯",
-    "expectedKeywords": [
-      "12 小时保温"
-    ],
     "answerKeywords": [
       "12 小时保温",
       "产品名 保温杯"
@@ -278,10 +186,6 @@
   {
     "question": "加湿器静音吗",
     "category": "product",
-    "expectedSource": "加湿器",
-    "expectedKeywords": [
-      "30dB"
-    ],
     "answerKeywords": [
       "30dB 静音",
       "产品名 加湿器"
@@ -290,10 +194,6 @@
   {
     "question": "香薰机容量多大",
     "category": "product",
-    "expectedSource": "香薰机",
-    "expectedKeywords": [
-      "300ml"
-    ],
     "answerKeywords": [
       "容量 300ml",
       "产品名 香薰机"
@@ -302,10 +202,6 @@
   {
     "question": "台灯有没有频闪",
     "category": "product",
-    "expectedSource": "台灯",
-    "expectedKeywords": [
-      "无频闪"
-    ],
     "answerKeywords": [
       "无频闪",
       "产品名 台灯"
@@ -314,10 +210,6 @@
   {
     "question": "双肩包能放笔记本吗",
     "category": "product",
-    "expectedSource": "双肩包",
-    "expectedKeywords": [
-      "15.6 寸笔记本"
-    ],
     "answerKeywords": [
       "15.6 寸笔记本",
       "产品名 双肩包"
@@ -326,10 +218,6 @@
   {
     "question": "钱包是真皮的吗",
     "category": "product",
-    "expectedSource": "钱包",
-    "expectedKeywords": [
-      "头层牛皮"
-    ],
     "answerKeywords": [
       "头层牛皮",
       "产品名 钱包"
@@ -338,10 +226,6 @@
   {
     "question": "运动手环防水吗",
     "category": "product",
-    "expectedSource": "运动手环",
-    "expectedKeywords": [
-      "50 米防水"
-    ],
     "answerKeywords": [
       "50 米防水",
       "产品名 运动手环"
@@ -350,10 +234,6 @@
   {
     "question": "瑜伽垫厚度多少",
     "category": "product",
-    "expectedSource": "瑜伽垫",
-    "expectedKeywords": [
-      "8mm"
-    ],
     "answerKeywords": [
       "厚度 8mm",
       "产品名 瑜伽垫"
@@ -362,10 +242,6 @@
   {
     "question": "咖啡豆是哪里产的",
     "category": "product",
-    "expectedSource": "咖啡豆",
-    "expectedKeywords": [
-      "埃塞俄比亚"
-    ],
     "answerKeywords": [
       "埃塞俄比亚产地",
       "产品名 咖啡豆"
@@ -374,10 +250,6 @@
   {
     "question": "铁观音是什么档次",
     "category": "product",
-    "expectedSource": "铁观音",
-    "expectedKeywords": [
-      "特级"
-    ],
     "answerKeywords": [
       "特级",
       "产品名 铁观音"
@@ -386,10 +258,6 @@
   {
     "question": "乳胶枕含量多少",
     "category": "product",
-    "expectedSource": "枕头 乳胶款",
-    "expectedKeywords": [
-      "93%"
-    ],
     "answerKeywords": [
       "93% 乳胶含量",
       "产品名 枕头 乳胶款"
@@ -398,10 +266,6 @@
   {
     "question": "猫砂盆多大尺寸",
     "category": "product",
-    "expectedSource": "猫砂盆",
-    "expectedKeywords": [
-      "50×40×40cm"
-    ],
     "answerKeywords": [
       "尺寸 50×40×40cm",
       "产品名 猫砂盆"
@@ -410,10 +274,6 @@
   {
     "question": "宠物喂食器能装多少粮",
     "category": "product",
-    "expectedSource": "宠物喂食器",
-    "expectedKeywords": [
-      "4L"
-    ],
     "answerKeywords": [
       "容量 4L",
       "产品名 宠物喂食器"
@@ -422,10 +282,6 @@
   {
     "question": "乐高适合多大孩子玩",
     "category": "product",
-    "expectedSource": "乐高积木",
-    "expectedKeywords": [
-      "6-12 岁"
-    ],
     "answerKeywords": [
       "6-12 岁",
       "产品名 乐高积木"
@@ -434,10 +290,6 @@
   {
     "question": "四件套是纯棉的吗",
     "category": "product",
-    "expectedSource": "四件套",
-    "expectedKeywords": [
-      "100% 长绒棉"
-    ],
     "answerKeywords": [
       "100% 长绒棉",
       "产品名 四件套"
@@ -446,11 +298,6 @@
   {
     "question": "退货政策是什么",
     "category": "policy",
-    "expectedSource": "退货政策",
-    "expectedKeywords": [
-      "7 天",
-      "无理由"
-    ],
     "answerKeywords": [
       "7 天无理由退货",
       "商品需未拆封无损坏"
@@ -459,10 +306,6 @@
   {
     "question": "换货要运费吗",
     "category": "policy",
-    "expectedSource": "换货政策",
-    "expectedKeywords": [
-      "换货运费"
-    ],
     "answerKeywords": [
       "质量问题商家承担",
       "非质量问题买家承担"
@@ -471,10 +314,6 @@
   {
     "question": "退款多久到账",
     "category": "policy",
-    "expectedSource": "退款流程",
-    "expectedKeywords": [
-      "3 个工作日内退款"
-    ],
     "answerKeywords": [
       "3 个工作日内退款",
       "信用卡 3-5 个银行工作日到账"
@@ -483,10 +322,6 @@
   {
     "question": "保修需要什么凭证",
     "category": "policy",
-    "expectedSource": "保修政策",
-    "expectedKeywords": [
-      "购买凭证"
-    ],
     "answerKeywords": [
       "购买凭证",
       "订单号或发票"
@@ -495,10 +330,6 @@
   {
     "question": "定制商品能退吗",
     "category": "policy",
-    "expectedSource": "退货政策",
-    "expectedKeywords": [
-      "定制商品"
-    ],
     "answerKeywords": [
       "不支持 7 天无理由",
       "质量问题可申请售后"
@@ -507,10 +338,6 @@
   {
     "question": "质量问题退货运费谁出",
     "category": "policy",
-    "expectedSource": "退货政策",
-    "expectedKeywords": [
-      "质量问题"
-    ],
     "answerKeywords": [
       "质量问题商家承担运费"
     ]
@@ -518,10 +345,6 @@
   {
     "question": "东西坏了找谁",
     "category": "policy",
-    "expectedSource": "保修政策",
-    "expectedKeywords": [
-      "联系售后"
-    ],
     "answerKeywords": [
       "联系售后客服",
       "保修期内免费维修"
@@ -530,8 +353,6 @@
   {
     "question": "你们卖电视机吗",
     "category": "none",
-    "expectedSource": "",
-    "expectedKeywords": [],
     "answerKeywords": [
       "不卖电视机",
       "可查看其他数码产品"
@@ -540,8 +361,6 @@
   {
     "question": "怎么加盟你们品牌",
     "category": "none",
-    "expectedSource": "",
-    "expectedKeywords": [],
     "answerKeywords": [
       "不负责加盟",
       "联系官方客服"
@@ -550,8 +369,6 @@
   {
     "question": "招聘吗我想来上班",
     "category": "none",
-    "expectedSource": "",
-    "expectedKeywords": [],
     "answerKeywords": [
       "不负责招聘",
       "关注官方招聘渠道"
@@ -560,8 +377,6 @@
   {
     "question": "你们门店在哪",
     "category": "none",
-    "expectedSource": "",
-    "expectedKeywords": [],
     "answerKeywords": [
       "没有线下门店",
       "只有线上商城"

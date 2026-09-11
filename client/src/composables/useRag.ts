@@ -58,9 +58,17 @@ export function useRag() {
             const parsed = JSON.parse(line.slice(6)) as RagStreamEvent;
 
             if (parsed.type === 'sources') {
+              // 按 source（文档标题）去重，同一个文档的多个 chunk 只展示一次
+              const rawSources = parsed.sources ?? [];
+              const seen = new Set<string>();
+              const deduped = rawSources.filter(s => {
+                if (seen.has(s.source)) return false;
+                seen.add(s.source);
+                return true;
+              });
               messages.value[assistantIndex] = {
                 ...messages.value[assistantIndex]!,
-                sources: parsed.sources ?? [],
+                sources: deduped,
               };
             }
 

@@ -17,7 +17,6 @@ interface CreateModelOptions {
  * @param options - 可覆盖默认参数，如 { temperature: 0, streaming: true }
  */
 export const createModel = (options: CreateModelOptions = {}) => {
-  console.log('DEEPSEEK_API_KEY', process.env.DEEPSEEK_API_KEY);
   return new ChatOpenAI({
     model: process.env.MODEL_NAME || 'deepseek-v4-flash',
     apiKey: process.env.DEEPSEEK_API_KEY,

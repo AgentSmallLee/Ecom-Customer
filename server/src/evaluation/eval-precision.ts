@@ -16,34 +16,37 @@
 //   和召回率的区别：召回率怕漏掉（查全率），准确率怕掺假（查准率）。
 //
 // 相关判断标准：
-//   chunk 的内容包含 expectedSource（正确答案所在的商品/政策标题）就算相关
+//   用 LLM 语义判断每个 chunk 对回答问题是否有直接帮助
 //   无答案问题：top-K 里一条相关的都没有 → Precision = 1.0（没乱召回就是准）
 //
-// 为什么用文档标题匹配当相关标准？
-//   1. 实现简单，不用给每个 chunk 单独人工标注
-//   2. 复用现有评测集，零额外标注成本
-//   3. 电商客服场景下，同一个商品的信息都算相关，比较合理
-//   4. 当然这是近似标准，真要严格可以用 embedding 相似度阈值或人工标注
+// 为什么从字符串匹配改成 LLM 语义判断？
+//   字符串匹配（按 expectedSource 标题判断）粒度太粗：
+//     · 假阳性：同一个商品但内容完全不相关也判成相关
+//     · 假阴性：相关但措辞不一样判成不相关
+//   LLM 做语义级别的判断更准确，更接近用户感知的"相关"定义
 
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { vectorSearch, keywordSearch, hybridSearch } from '../chains/rag-chain.ts';
 import { pool } from '../db/postgres.ts';
+import { LlmService } from '../llm/llm.service.ts';
 
 // 当前文件所在目录（ESM 环境下没有 __dirname，需要手动计算）
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// 评测集文件路径：每个问题包含预期的正确答案来源（expectedSource）
-const EVAL_FILE = join(__dirname, '../data/eval/eval-set.json');
+// 评测集文件路径
+const EVAL_FILE = join(__dirname, './eval-set.json');
 
 type Mode = 'vector' | 'keyword' | 'hybrid';
+
+// LLM 服务实例（用于语义判断 chunk 是否相关）
+const llm = new LlmService();
 
 // 评测集每一项的类型定义
 interface EvalItem {
   question: string;          // 用户问题
   category: 'product' | 'policy' | 'none'; // 问题分类，用于分类统计
-  expectedSource: string;    // 正确答案所在的文档/商品标题，用来判断 chunk 是否相关
-  expectedKeywords: string[]; // 预期关键词（备用，当前 Precision 评估不用这个）
+  answerKeywords: string[];   // 答案要点（生成质量评估用，准确率评估不依赖）
 }
 
 // ────────────────────────────────────────────
@@ -106,19 +109,46 @@ async function searchByMode(query: string, mode: Mode, k: number) {
 }
 
 // ────────────────────────────────────────────
-// 判断单个 chunk 是否相关
+// 判断单个 chunk 是否相关（LLM 语义评估版）
 // ────────────────────────────────────────────
-// 相关标准：chunk 的文本内容包含 expectedSource 字符串。
-// 比如 expectedSource 是 "蓝牙耳机 X1 Pro"，只要 chunk 里有这个标题就算相关。
+// 用 LLM 判断这个 chunk 从语义上对回答问题有没有帮助。
 //
-// 无答案问题（expectedSource 为空）：不存在相关的 chunk，直接返回 false。
-function isRelevant(doc: { pageContent: string }, expectedSource: string): boolean {
-  if (!expectedSource) return false;
-  return doc.pageContent.includes(expectedSource);
+// 为什么不用字符串匹配了？
+//   字符串匹配（包含 expectedSource 就判相关，粒度太粗：
+//     · 同一个商品但内容完全不相关也判成相关（假阳性）
+//     · 相关但措辞不一样判成不相关（假阴性）
+//   LLM 做语义判断更准确，也更接近用户感知的"相关"定义。
+//
+// 无答案问题：所有 chunk 都应该是不相关的
+async function isRelevantLLM(
+  question: string,
+  doc: { pageContent: string },
+  category: string,
+): Promise<boolean> {
+  // 无答案问题：没有正确答案，所有 chunk 都不相关
+  if (category === 'none') return false;
+
+  const prompt = `你是一个检索质量评估员。请判断以下候选上下文片段对回答这个问题是否有帮助。
+
+【问题】
+${question}
+
+【候选上下文片段】
+${doc.pageContent}
+
+判断标准：
+- 只有当这个片段包含与问题直接相关的信息，能帮助回答问题，就算相关
+- 如果片段完全不相关，或者只有间接相关但没有实际帮助，就算不相关
+- 注意：必须是"直接相关"，只是同一个商品但说的是别的事也算不相关
+
+请只输出 yes 或 no，不要输出其他任何文字。`;
+
+  const raw = await llm.predict(prompt);
+  return raw.trim().toLowerCase().startsWith('yes');
 }
 
 // ────────────────────────────────────────────
-// 计算单个问题的 Precision@K
+// 计算单个问题的 Precision@K（LLM 语义评估版）
 // ────────────────────────────────────────────
 // Precision@K = top-K 结果中相关的数量 ÷ 实际返回数量
 //
@@ -130,25 +160,30 @@ function isRelevant(doc: { pageContent: string }, expectedSource: string): boole
 //   - 一条都没召回 → 1.0（没乱召回，很准）
 //   - 召回了任何东西 → 0.0（乱召回了，不准）
 //   这是因为无答案问题不存在"相关文档"，不能用普通公式算。
-function calcPrecision(
+async function calcPrecision(
+  question: string,
   docs: { pageContent: string }[],
-  expectedSource: string,
+  category: string,
   k: number,
-): number {
+): Promise<number> {
   // 截取 top-K 条结果（slice 越界不会报错，自动截断到实际长度）
   const topK = docs.slice(0, k);
 
   // 一条结果都没有
   if (topK.length === 0) {
-    if (!expectedSource) return 1.0; // 无答案问题，没乱召回 = 准
+    if (category === 'none') return 1.0; // 无答案问题，没乱召回 = 准
     return 0;
   }
 
   // 无答案问题：只要召回了东西，就是不准
-  if (!expectedSource) return 0;
+  if (category === 'none') return 0;
 
-  // 统计 top-K 里有多少条是相关的
-  const relevantCount = topK.filter(d => isRelevant(d, expectedSource)).length;
+  // 逐条用 LLM 判断是否相关，并发调用加快速度
+  const relevantResults = await Promise.all(
+    topK.map(doc => isRelevantLLM(question, doc, category))
+  );
+  const relevantCount = relevantResults.filter(Boolean).length;
+
   // 准确率 = 相关数量 ÷ 实际返回数量
   return relevantCount / topK.length;
 }
@@ -198,19 +233,23 @@ async function evaluateMode(evalSet: EvalItem[], mode: Mode, ks: number[]) {
     const item = evalSet[i];
 
     // 打印进度，比如 [12/49] 蓝牙耳机多少钱 ... P@1=1.00 P@3=0.67
-    process.stdout.write(`  [${i + 1}/${evalSet.length}] ${item.question} ... `);
+    process.stdout.write(`  [${i + 1}/${evalSet.length}] ${item.question.slice(0, 20)}... `);
 
     // 只调一次检索，拿 maxK 条结果
     const docs = await searchByMode(item.question, mode, maxK);
 
-    // 对每个 K 值分别计算准确率
+    // 对每个 K 值分别计算准确率（并发调用，加速）
+    const precResults = await Promise.all(
+      ks.map(k => calcPrecision(item.question, docs, item.category, k))
+    );
+
     let precStr = '';
-    for (const k of ks) {
-      const prec = calcPrecision(docs, item.expectedSource, k);
+    ks.forEach((k, idx) => {
+      const prec = precResults[idx];
       precisionByK[k].push(prec);
       catPrecision[item.category][k].push(prec);
       precStr += `P@${k}=${prec.toFixed(2)} `;
-    }
+    });
 
     console.log(precStr);
   }
@@ -249,7 +288,7 @@ async function main() {
   console.log(`  评测集：${evalSet.length} 个问题`);
   console.log(`  K 值：${ks.join(', ')}`);
   console.log(`  模式：${mode}`);
-  console.log(`  相关标准：chunk 包含 expectedSource 标题即为相关`);
+  console.log(`  相关标准：LLM 语义判断 chunk 对回答问题是否有帮助`);
 
   if (mode === 'all') {
     // 三种模式都跑，方便对比

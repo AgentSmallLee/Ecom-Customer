@@ -33,8 +33,6 @@ const RESULT_FILE = join(__dirname, './generation-result.json');
 interface EvalItem {
   question: string;
   category: 'product' | 'policy' | 'none';
-  expectedSource: string;
-  expectedKeywords: string[];
   answerKeywords: string[];
 }
 

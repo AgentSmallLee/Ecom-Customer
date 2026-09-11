@@ -39,7 +39,7 @@
           </div>
           <div v-if="msg.sources && msg.sources.length" class="sources-wrap">
             <span class="sources-label">参考来源</span>
-            <span v-for="(src, si) in msg.sources" :key="si" class="source-tag">
+            <span v-for="(src, si) in uniqueSources(msg.sources)" :key="si" class="source-tag">
               {{ src.source }}
             </span>
           </div>
@@ -69,10 +69,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue';
+import { ref, nextTick, computed } from 'vue';
 import { useRag } from '../composables/useRag.ts';
 
 const { messages, loading, error, ask, clearMessages } = useRag();
+
+// 按 source 字段去重后的参考来源（同一个文档的多个 chunk 只展示一次）
+const uniqueSources = (sources: { source: string }[]) => {
+  const seen = new Set<string>();
+  return sources.filter(s => {
+    if (seen.has(s.source)) return false;
+    seen.add(s.source);
+    return true;
+  });
+};
 
 const inputText   = ref('');
 const messagesRef = ref<HTMLElement | null>(null);

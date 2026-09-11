@@ -40,8 +40,8 @@ const PG_CONFIG = {
 };
 
 const splitter = new RecursiveCharacterTextSplitter({
-  chunkSize:    100,
-  chunkOverlap: 10,
+  chunkSize:    500,
+  chunkOverlap: 50,
 });
 
 // 解析命令行参数
