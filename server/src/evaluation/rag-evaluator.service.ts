@@ -20,7 +20,7 @@
 //   });
 
 import { Injectable } from '@nestjs/common';
-import { LlmClientService } from '../llm/llm-client.service.js';
+import { FailoverChatModel } from '../llm/failover-chat-model.js';
 
 // ────────────────────────────────────────────
 // 类型定义
@@ -68,7 +68,7 @@ interface EvalReport {
 
 @Injectable()
 export class RagEvaluatorService {
-  constructor(private readonly llm: LlmClientService) {}
+  constructor(private readonly llm: FailoverChatModel) {}
 
   // ────────────────────────────────────────────
   // 批量评估入口

@@ -1,5 +1,6 @@
 // server/src/graph/graph.service.ts
 // LangGraph 工作流服务：持有编译后的图单例（DI 生命周期管理）
+import { randomUUID } from 'crypto';
 import { HumanMessage } from '@langchain/core/messages';
 import type { BaseMessage } from '@langchain/core/messages';
 import type { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
@@ -48,8 +49,10 @@ export class GraphService {
    */
   async *stream(message: string, threadId: string, userId?: string): AsyncGenerator<GraphStreamEvent> {
     const graph = this.getGraph();
+    // traceId：每次请求唯一，关联本次请求内所有节点的所有 LLM 调用
+    const traceId = randomUUID();
     const config: LangGraphRunnableConfig = {
-      configurable: { thread_id: withNamespace(NAMESPACE, threadId, userId), user_id: userId },
+      configurable: { thread_id: withNamespace(NAMESPACE, threadId, userId), user_id: userId, traceId },
     };
 
     // graph.stream 接收2个参数
@@ -98,6 +101,7 @@ export class GraphService {
         { userInput, finalAnswer },
         this.store,
         userId,
+        traceId,
       ).catch((err) =>
         console.error('[GraphService][memoryWriter] 异步写入失败:', err instanceof Error ? err.message : err)
       );

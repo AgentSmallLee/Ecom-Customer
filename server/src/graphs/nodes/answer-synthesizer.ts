@@ -2,7 +2,7 @@
 // 答案合成节点：把订单查询/RAG检索/通用对话的结果整理成最终回答
 // 流式生成，逐 token 推送到 custom 流，实现打字机效果
 import { AIMessage } from '@langchain/core/messages';
-import { createModel }        from '../../models/deepseek.ts';
+import { createModel }        from '../../models/model-factory.ts';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { buildMemoryContext } from '../memory-context.ts';
@@ -53,15 +53,21 @@ export const answerSynthesizerNode = async (
     .map((m) => [m._getType?.() === 'human' ? 'human' : 'assistant', m.content] as const);
 
   const writer = getWriter(config);
+  // 从 configurable 中取 traceId（入口生成，全链路共享）
+  const traceId = config?.configurable?.traceId as string | undefined;
 
   // 流式生成 + 逐 token 推送
-  const stream = await streamingChain.stream({
-    userInput,
-    orderResult: orderResult ? JSON.stringify(orderResult.answer) : '无',
-    ragResult:   ragResult   || '无',
-    memoryContext: buildMemoryContext(state),
-    chat_history: chatHistory,
-  });
+  // source / traceId 放 call options 顶层，FailoverChatModel 从 options 直接读取写审计日志
+  const stream = await streamingChain.stream(
+    {
+      userInput,
+      orderResult: orderResult ? JSON.stringify(orderResult.answer) : '无',
+      ragResult:   ragResult   || '无',
+      memoryContext: buildMemoryContext(state),
+      chat_history: chatHistory,
+    },
+    { source: 'graph-answer-synth', traceId } as any
+  );
 
   let fullAnswer = '';
   for await (const chunk of stream) {

@@ -2,10 +2,11 @@
 // 长度控制节点：消息数超过阈值时，把旧摘要 + 旧消息交给 LLM 压缩成新摘要，
 // 并用 RemoveMessage 从 checkpoint 状态中删除被压缩的旧消息（保留最近几条）。
 import { RemoveMessage } from '@langchain/core/messages';
-import { createModel }        from '../../models/deepseek.ts';
+import { createModel }        from '../../models/model-factory.ts';
 import { ChatPromptTemplate }  from '@langchain/core/prompts';
 import { StringOutputParser }  from '@langchain/core/output_parsers';
 import type { GraphStateType } from '../state.ts';
+import type { LangGraphRunnableConfig } from '@langchain/langgraph';
 
 // 触发压缩的消息数阈值 / 压缩后保留的最近消息数（可用 env 覆盖）
 const SUMMARY_THRESHOLD = parseInt(process.env.MEMORY_SUMMARY_THRESHOLD || '10');
@@ -29,8 +30,10 @@ const prompt = ChatPromptTemplate.fromMessages([
 
 const chain = prompt.pipe(createModel({ temperature: 0 })).pipe(new StringOutputParser());
 
-export const summarizeNode = async (state: GraphStateType) => {
+export const summarizeNode = async (state: GraphStateType, config: LangGraphRunnableConfig) => {
   const { messages, summary } = state;
+  // 从 configurable 中取 traceId（入口生成，全链路共享）
+  const traceId = config?.configurable?.traceId as string | undefined;
 
   const oldMessages = messages.slice(0, -KEEP_RECENT);
   if (oldMessages.length === 0) return {};
@@ -40,10 +43,13 @@ export const summarizeNode = async (state: GraphStateType) => {
     .join('\n');
 
   try {
-    const newSummary = await chain.invoke({
-      summary: summary || '（无）',
-      conversation,
-    });
+    const newSummary = await chain.invoke(
+      {
+        summary: summary || '（无）',
+        conversation,
+      },
+      { source: 'graph-summarize', traceId } as any
+    );
 
     console.log(
       `[summarize] 压缩 ${oldMessages.length} 条旧消息 → 摘要（保留最近 ${KEEP_RECENT} 条）`

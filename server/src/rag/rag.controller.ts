@@ -1,5 +1,6 @@
 // server/src/rag/rag.controller.ts
 // POST /api/rag/query - 知识库问答（SSE 流式，带参考来源）
+import { randomUUID } from 'crypto';
 import { Body, Controller, Inject, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { RagService } from './rag.service.ts';
@@ -43,7 +44,9 @@ export class RagController {
       res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
 
     try {
-      const stream = this.ragService.stream(question);
+      // traceId：每次请求唯一，关联本次请求内的所有 LLM 调用
+      const traceId = randomUUID();
+      const stream = this.ragService.stream(question, traceId);
       let fullAnswer = '';
       let sourcesSent = false;
 

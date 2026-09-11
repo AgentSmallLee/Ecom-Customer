@@ -3,10 +3,11 @@
 import { ChatPromptTemplate }  from '@langchain/core/prompts';
 import { StringOutputParser }  from '@langchain/core/output_parsers';
 import { ragChain }            from '../../chains/rag-chain.ts';
-import { createModel }         from '../../models/deepseek.ts';
+import { createModel }         from '../../models/model-factory.ts';
 import { buildMemoryContext }  from '../memory-context.ts';
 import { formatMessagesAsText } from '../memory-context.ts';
 import type { GraphStateType } from '../state.ts';
+import type { LangGraphRunnableConfig } from '@langchain/langgraph';
 
 // 问题改写的 LLM chain：把带指代/省略的问题改写成独立完整的检索问题
 const rewritePrompt = ChatPromptTemplate.fromMessages([
@@ -36,8 +37,12 @@ const rewriteChain = rewritePrompt
   .pipe(createModel({ temperature: 0 }))
   .pipe(new StringOutputParser());
 
-export const ragNode = async (state: GraphStateType) => {
+export const ragNode = async (state: GraphStateType, config: LangGraphRunnableConfig) => {
   const { userInput, messages = [] } = state;
+  // 从 configurable 中取 traceId（入口生成，全链路共享）
+  const traceId = config?.configurable?.traceId as string | undefined;
+  // source / traceId 放 call options 顶层，FailoverChatModel 从 options 直接读取写审计日志
+  const callOpts = (source: string) => ({ source, traceId } as any);
 
   try {
     // ── 1. 组装上下文（最近几轮对话 + 摘要 + 长期记忆） ──
@@ -50,10 +55,13 @@ export const ragNode = async (state: GraphStateType) => {
     // ── 2. 有上下文时才做改写，单轮对话直接用原问题 ──
     if (contextParts.length > 0) {
       try {
-        searchQuery = await rewriteChain.invoke({
-          context:  contextParts.join('\n\n'),
-          question: userInput,
-        });
+        searchQuery = await rewriteChain.invoke(
+          {
+            context:  contextParts.join('\n\n'),
+            question: userInput,
+          },
+          callOpts('graph-rag-rewrite')
+        );
         // 简单兜底：如果改写结果为空，回退到原问题
         if (!searchQuery.trim()) searchQuery = userInput;
       } catch (rewriteErr) {
@@ -68,7 +76,10 @@ export const ragNode = async (state: GraphStateType) => {
     }
 
     // ── 3. 用改写后的问题检索 ──
-    const result = await ragChain.invoke({ question: searchQuery });
+    const result = await ragChain.invoke(
+      { question: searchQuery },
+      callOpts('graph-rag-chain')
+    );
     console.log(`[ragNode] 检索结果：${result}`);
     return { ragResult: result };
   } catch (err) {

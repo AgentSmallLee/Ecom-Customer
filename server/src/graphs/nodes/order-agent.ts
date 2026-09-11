@@ -5,7 +5,7 @@
 import { createAgent } from 'langchain';
 import { HumanMessage, AIMessage } from '@langchain/core/messages';
 import type { LangGraphRunnableConfig } from '@langchain/langgraph';
-import { createModel }      from '../../models/deepseek.ts';
+import { createModel }      from '../../models/model-factory.ts';
 import { createOrderTools } from '../../tools/order-tools.ts';
 import { buildMemoryContext, formatMessagesAsText } from '../memory-context.ts';
 import type { GraphStateType, ToolStep } from '../state.ts';
@@ -26,15 +26,6 @@ export const orderAgentNode = async (
   // 这样 getUserOrders 工具不需要 LLM 传 userId，直接用当前登录用户
   const userId = config?.configurable?.user_id as string | undefined;
   const tools = createOrderTools(userId || '');
-
-  // 动态创建 agent（每次调用都用绑定了当前用户的工具）
-  const agentApp = createAgent({
-    model,
-    tools,
-    systemPrompt: `你是红松心选的订单查询助手。
-根据用户的问题，调用相应工具查询订单或物流信息。
-只查询数据，不需要生成最终的客服回答。`,
-  });
 
   // contextParts：组装要注入 Agent 的对话上下文，解决"指代消解"问题
   //   组件1 = buildMemoryContext(state) → 对话摘要 + 长期记忆（用户偏好）
@@ -61,8 +52,29 @@ export const orderAgentNode = async (
     : [new HumanMessage(userInput)];
 
   try {
-    // createAgent 返回 agent 实例，invoke 入参为 { messages }，返回带 messages 的结果
-    const result = await agentApp.invoke({ messages: inputMessages });
+    // 从 configurable 中取 traceId（入口生成，全链路共享）
+    const traceId = config?.configurable?.traceId as string | undefined;
+
+    // 给模型预设审计上下文（source + traceId），再传入 createAgent
+    // 原因：createAgent 内部调用 LLM 时，自定义 call option 无法可靠透传，
+    // 所以用 withAuditContext 把默认值写入模型实例，extractMetadata 会优先使用
+    const modelWithContext = model.withAuditContext({
+      source:  'graph-order-agent',
+      traceId,
+    });
+
+    // 动态创建 agent（每次调用都用绑定了当前用户的工具 + 审计上下文的模型）
+    const agentAppWithContext = createAgent({
+      model: modelWithContext,
+      tools,
+      systemPrompt: `你是红松心选的订单查询助手。
+根据用户的问题，调用相应工具查询订单或物流信息。
+只查询数据，不需要生成最终的客服回答。`,
+    });
+
+    const result = await agentAppWithContext.invoke(
+      { messages: inputMessages },
+    );
 
     // 从消息列表提取工具调用步骤
     const msgs  = result.messages;

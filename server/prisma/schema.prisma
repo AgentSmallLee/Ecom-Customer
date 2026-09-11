@@ -34,7 +34,7 @@ model LlmAuditLog {
   source        String    // 来源接口，如 'simple-chat' / 'rag-query' / 'react-agent'
 
   // 模型信息
-  model         String    // 实际使用的模型名，如 'qwen3.5:0.8b' / 'deepseek-chat'
+  model         String    // 实际使用的模型名，如 'deepseek-flash'
   provider      String    // 模型提供商，如 'ollama' / 'deepseek' / 'openai'
   isFailover    Boolean   @default(false)   // 是否触发了降级
 

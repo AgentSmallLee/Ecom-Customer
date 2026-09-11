@@ -1,6 +1,7 @@
 // server/src/agent/agent.service.ts
 // Agent 服务：带短期记忆（checkpointer）的 ReAct Agent
 import { Inject, Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { HumanMessage, AIMessage, ToolMessage, BaseMessage, SystemMessage } from '@langchain/core/messages';
 import { CHECKPOINTER } from '../common/memory/memory.module.ts';
 import { withNamespace, trimMessages, DEFAULT_MAX_ROUNDS } from '../common/memory/thread-utils.ts';
@@ -15,7 +16,7 @@ import {
 } from '@langchain/langgraph';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
 import { createOrderTools } from '../tools/order-tools.ts';
-import { createModel } from '../models/deepseek.ts';
+import { createModel } from '../models/model-factory.ts';
 
 const NAMESPACE = 'agent';
 
@@ -78,16 +79,27 @@ export class AgentService {
       state: typeof MessagesAnnotation.State,
       config: LangGraphRunnableConfig,
     ) => {
-      // 从 config 取出 userId，动态绑定带当前用户的工具
-      const userId = config?.configurable?.user_id as string | undefined;
+      // 从 config 取出 userId / traceId
+      const userId  = config?.configurable?.user_id  as string | undefined;
+      // traceId：如果入口已传入则复用，否则生成一个（保证同一次用户请求内多次 LLM 调用共享）
+      const traceId = (config?.configurable?.traceId as string | undefined) || randomUUID();
       const tools = createOrderTools(userId || '');
-      const modelWithTools = this.baseModel.bindTools(tools);
+      const modelWithTools = (this.baseModel as any).bindTools(tools);
 
       // 获取流式模型的输出流
       const writer = getWriter(config);
       // 在消息最前面注入系统提示词（每次都加，不存入历史，保持动态可更新）
       const messagesWithSystem = [new SystemMessage(AGENT_SYSTEM_PROMPT), ...state.messages];
-      const stream = await modelWithTools.stream(messagesWithSystem);
+      // 判断是否为工具结果后的第二次 LLM 调用：state.messages 最后一条是 ToolMessage 则说明工具已执行
+      const lastMsg = state.messages[state.messages.length - 1];
+      const isAfterTool = lastMsg && (lastMsg as any)._getType?.() === 'tool';
+      const source = isAfterTool ? 'graph-agent-tool-result' : 'graph-agent';
+      // source / traceId 作为自定义 call option 直接传顶层，FailoverChatModel 从 options 里读取写审计日志
+      // 注意：不能放 metadata 里，LangChain 会把 metadata 抽到 callback manager，模型 callOptions 里拿不到
+      const stream = await modelWithTools.stream(messagesWithSystem, {
+        source,
+        traceId,
+      } as any);
 
       let content = '';
       // 用字符串暂存 args，流式场景下是逐段字符串拼起来的
@@ -183,7 +195,9 @@ export class AgentService {
 
   /** 非流式调用（一次性返回） */
   async invoke(message: string, threadId: string, userId?: string) {
-    const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId, userId), user_id: userId } };
+    // traceId：每次请求唯一，关联本次请求内的所有 LLM 调用
+    const traceId = randomUUID();
+    const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId, userId), user_id: userId, traceId } };
 
     const result = await this.graph.invoke(
       { messages: [new HumanMessage(message)] },
@@ -198,7 +212,9 @@ export class AgentService {
 
   /** 流式调用：通过 custom 流推送 token + 工具步骤事件 */
   async *stream(message: string, threadId: string, userId?: string): AsyncGenerator<AgentStreamEvent> {
-    const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId, userId), user_id: userId } };
+    // traceId：每次请求唯一，关联本次请求内的所有 LLM 调用
+    const traceId = randomUUID();
+    const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId, userId), user_id: userId, traceId } };
 
     const stream = await this.graph.stream(
       { messages: [new HumanMessage(message)] },

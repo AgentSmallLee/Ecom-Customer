@@ -4,7 +4,7 @@ import { StringOutputParser }  from '@langchain/core/output_parsers';
 import { ChatPromptTemplate }  from '@langchain/core/prompts';
 import { Document }            from '@langchain/core/documents';
 import { PGVectorStore }       from '@langchain/community/vectorstores/pgvector';
-import { createModel }         from '../models/deepseek.ts';
+import { createModel }         from '../models/model-factory.ts';
 import { embeddings }          from '../models/embedding.ts';
 import { pool }                from '../db/postgres.ts';
 

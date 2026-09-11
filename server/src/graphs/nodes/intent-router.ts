@@ -1,9 +1,10 @@
 // server/src/graphs/nodes/intent-router.ts
-import { createModel }        from '../../models/deepseek.ts';
+import { createModel }        from '../../models/model-factory.ts';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { formatMessagesAsText } from '../memory-context.ts';
 import type { GraphStateType, Intent } from '../state.ts';
+import type { LangGraphRunnableConfig } from '@langchain/langgraph';
 
 const intentPrompt = ChatPromptTemplate.fromMessages([
   [
@@ -30,8 +31,10 @@ const isValidIntent = (s: string): s is Intent =>
   (VALID_INTENTS as string[]).includes(s);
 
 // 节点函数
-export const intentRouterNode = async (state: GraphStateType) => {
+export const intentRouterNode = async (state: GraphStateType, config: LangGraphRunnableConfig) => {
   const { userInput, messages } = state;
+  // 从 configurable 中取 traceId（入口生成，全链路共享）
+  const traceId = config?.configurable?.traceId as string | undefined;
 
   // 附带最近几轮对话，让"那它发货了吗"这类指代式追问也能正确分类
   const recentDialogue = formatMessagesAsText((messages || []).slice(0, -1), 4);
@@ -39,7 +42,12 @@ export const intentRouterNode = async (state: GraphStateType) => {
     ? `${userInput}\n\n（最近对话，供理解指代参考）\n${recentDialogue}`
     : userInput;
   console.log('[intentRouter] 输入:', input);
-  const raw    = await chain.invoke({ userInput: input });
+  // source / traceId 放 call options 顶层，FailoverChatModel 从 options 直接读取写审计日志
+  // 注意：不能放 metadata 里，LangChain 会把 metadata 抽到 callback manager，模型拿不到
+  const raw    = await chain.invoke(
+    { userInput: input },
+    { source: 'graph-intent-router', traceId } as any
+  );
   const intent = raw.trim().toLowerCase();
   const final  = isValidIntent(intent) ? intent : 'general';
   console.log(`[intentRouter] "${userInput}" → ${final}`);

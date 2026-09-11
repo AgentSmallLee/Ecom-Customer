@@ -7,7 +7,7 @@
  *   输入对象 → Prompt 格式化 → messages 数组 → Model 调用 → AIMessage → Parser 提取 → 字符串
  */
 import { StringOutputParser } from '@langchain/core/output_parsers';
-import { createModel } from '../models/deepseek.ts';
+import { createModel } from '../models/model-factory.ts';
 import { customerServicePrompt } from '../prompts/customer-service.ts';
 
 // ─── 红松心选客服 Chain（非流式）───────────────────────────────────

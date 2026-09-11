@@ -1,7 +1,7 @@
 // server/src/graphs/nodes/general-chat.ts
 // 通用对话节点：处理订单/知识之外的闲聊、问候等
 // 流式生成，逐 token 推送到 custom 流
-import { createModel }        from '../../models/deepseek.ts';
+import { createModel }        from '../../models/model-factory.ts';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { buildMemoryContext } from '../memory-context.ts';
@@ -40,11 +40,17 @@ export const generalChatNode = async (
     .filter(Boolean);
 
   const writer = getWriter(config);
-  const stream = await streamingChain.stream({
-    userInput,
-    chat_history: chatHistory,
-    memoryContext: buildMemoryContext(state),
-  });
+  // 从 configurable 中取 traceId（入口生成，全链路共享）
+  const traceId = config?.configurable?.traceId as string | undefined;
+  // source / traceId 放 call options 顶层，FailoverChatModel 从 options 直接读取写审计日志
+  const stream = await streamingChain.stream(
+    {
+      userInput,
+      chat_history: chatHistory,
+      memoryContext: buildMemoryContext(state),
+    },
+    { source: 'graph-general-chat', traceId } as any
+  );
 
   let result = '';
   for await (const chunk of stream) {

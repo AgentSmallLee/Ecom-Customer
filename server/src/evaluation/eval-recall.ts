@@ -24,7 +24,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { vectorSearch, keywordSearch, hybridSearch } from '../chains/rag-chain.ts';
 import { pool } from '../db/postgres.ts';
-import { LlmClientService } from '../llm/llm-client.service.ts';
+import { createModel } from '../models/model-factory.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const EVAL_FILE = join(__dirname, './eval-set.json');
@@ -98,8 +98,8 @@ async function searchByMode(query: string, mode: Mode, k: number) {
   }
 }
 
-// LLM 服务实例（用于语义判断召回是否命中）
-const llm = new LlmClientService();
+// LLM 模型实例（用于语义判断召回是否命中）
+const llm = createModel({ temperature: 0 });
 
 // ────────────────────────────────────────────
 // 判断是否命中（召回率判断标准 — LLM 语义评估版）

@@ -21,7 +21,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { ragChainWithSources } from '../chains/rag-chain.ts';
 import { RagEvaluatorService } from './rag-evaluator.service.ts';
-import { LlmClientService } from '../llm/llm-client.service.ts';
+import { createModel } from '../models/model-factory.ts';
 import { pool } from '../db/postgres.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -83,8 +83,8 @@ async function main() {
   console.log(`  注意：每道题调 3 次 LLM 打分，请耐心等待\n`);
 
   // 初始化评估服务
-  const llmService = new LlmClientService();
-  const evaluator = new RagEvaluatorService(llmService);
+  const llm = createModel({ temperature: 0 });
+  const evaluator = new RagEvaluatorService(llm);
 
   // ── 第一步：批量生成回答 ──
   console.log('🚀 第一步：调用 RAG 生成回答...\n');
@@ -93,7 +93,10 @@ async function main() {
   const generated = await Promise.all(
     evalSet.map(async (item, i) => {
       process.stdout.write(`  [${i + 1}/${evalSet.length}] ${item.question.slice(0, 20)}... `);
-      const result = await ragChainWithSources.invoke({ question: item.question });
+      const result = await ragChainWithSources.invoke(
+        { question: item.question },
+        { metadata: { source: 'eval-generation' } }
+      );
       console.log('✅ 生成完成');
       return {
         question: item.question,

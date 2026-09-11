@@ -3,7 +3,7 @@
 // 重新生成该用户的记忆列表，diff 写回 Store（新增 put、消失 delete）。
 // 纯副作用节点，失败不影响主流程。
 import type { BaseStore } from '@langchain/langgraph-checkpoint';
-import { createModel } from '../../models/deepseek.ts';
+import { createModel } from '../../models/model-factory.ts';
 import type { GraphStateType } from '../state.ts';
 
 const MAX_MEMORIES = 10;
@@ -58,11 +58,13 @@ function parseMemoryArray(text: string): string[] {
  * @param state - 对话状态（用户输入 + 最终回答）
  * @param store - 长期记忆存储实例
  * @param userId - 用户 ID（用于命名空间隔离）
+ * @param traceId - 可选，链路追踪 ID，关联本次用户请求
  */
 export const updateUserMemory = async (
   state: Pick<GraphStateType, 'userInput' | 'finalAnswer'>,
   store: BaseStore,
   userId: string,
+  traceId?: string,
 ) => {
   const { userInput, finalAnswer } = state;
   if (!userInput || !finalAnswer) return;
@@ -93,10 +95,13 @@ ${existingTexts.length ? existingTexts.map((t) => `- ${t}`).join('\n') : '（无
 
 请输出更新后的记忆列表（JSON 数组）：`;
 
-    const response = await model.invoke([
-      ['system', systemPrompt],
-      ['human', userPrompt],
-    ]);
+    const response = await model.invoke(
+      [
+        ['system', systemPrompt],
+        ['human', userPrompt],
+      ],
+      { source: 'graph-memory-writer', traceId } as any
+    );
 
     const responseText = typeof response.content === 'string'
       ? response.content

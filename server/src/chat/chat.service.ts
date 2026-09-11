@@ -1,6 +1,7 @@
 // server/src/chat/chat.service.ts
 // 基础对话服务：带短期记忆（checkpointer 持久化）
 import { Inject, Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import {
   customerServiceStreamChain,
   formatHistory,
@@ -45,12 +46,21 @@ export class ChatService {
         const input = history[history.length - 1]?.content || '';
         const pastHistory = history.slice(0, -1);
 
+        // 从 configurable 中取 traceId（每次用户请求唯一，由 chat()/stream() 生成）
+        // 一次请求内的多次 LLM 调用共享同一个 traceId
+        const traceId = config.configurable?.traceId as string | undefined;
+
         // 流式调用：逐 token 推送，同时收集完整输出
-        const stream = await customerServiceStreamChain.stream({
-          user_input:   input,
-          chat_history: formatHistory(pastHistory),
-          current_time: new Date().toLocaleString('zh-CN'),
-        });
+        // source / traceId 作为自定义 call option 传给模型层写审计日志
+        // （注意：不能用 metadata，LangChain 会把它抽走且不配 callbacks 时 runManager 为空）
+        const stream = await customerServiceStreamChain.stream(
+          {
+            user_input:   input,
+            chat_history: formatHistory(pastHistory),
+            current_time: new Date().toLocaleString('zh-CN'),
+          },
+          { source: 'chat-basic', traceId } as any
+        );
         let fullOutput = '';
         for await (const chunk of stream as unknown as AsyncIterable<string>) {
           if (chunk) {
@@ -70,7 +80,8 @@ export class ChatService {
 
   /** 普通对话（一次性返回） */
   async chat(message: string, threadId: string, userId?: string): Promise<string> {
-    const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId, userId), user_id: userId } };
+    // traceId：每次请求唯一，关联本次请求内的所有 LLM 调用（区别于跨轮次的 thread_id）
+    const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId, userId), user_id: userId, traceId: randomUUID() } };
 
     const result = await this.graph.invoke(
       { messages: [new HumanMessage(message)] },
@@ -89,7 +100,8 @@ export class ChatService {
 
   /** 流式对话：通过 graph.stream 执行，checkpointer 自动管理历史 */
   async *stream(message: string, threadId: string, userId?: string) {
-    const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId, userId), user_id: userId } };
+    // traceId：每次请求唯一，关联本次请求内的所有 LLM 调用（区别于跨轮次的 thread_id）
+    const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId, userId), user_id: userId, traceId: randomUUID() } };
 
     // 走图执行：历史由 checkpointer 自动加载，结果自动写入 checkpoint
     // streamMode: 'custom' —— 节点内通过 streamWriter 推送 token 级流式输出
