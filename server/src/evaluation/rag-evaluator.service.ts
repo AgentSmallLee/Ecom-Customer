@@ -20,7 +20,7 @@
 //   });
 
 import { Injectable } from '@nestjs/common';
-import { LlmService } from '../llm/llm.service.js';
+import { LlmClientService } from '../llm/llm-client.service.js';
 
 // ────────────────────────────────────────────
 // 类型定义
@@ -68,7 +68,7 @@ interface EvalReport {
 
 @Injectable()
 export class RagEvaluatorService {
-  constructor(private readonly llm: LlmService) {}
+  constructor(private readonly llm: LlmClientService) {}
 
   // ────────────────────────────────────────────
   // 批量评估入口
@@ -183,7 +183,7 @@ ${answer}
 
 请只输出一个 0.0 到 1.0 之间的数字，不要输出其他任何文字。`;
 
-    const raw = await this.llm.predict(prompt);
+    const raw = await this.llm.predict(prompt, 'eval-faithfulness');
     return this.extractScore(raw);
   }
 
@@ -209,7 +209,7 @@ ${answer}
 
 请只输出一个 0.0 到 1.0 之间的数字，不要输出其他任何文字。`;
 
-    const raw = await this.llm.predict(prompt);
+    const raw = await this.llm.predict(prompt, 'eval-relevance');
     return this.extractScore(raw);
   }
 
@@ -247,7 +247,7 @@ ${answer}
 注意：只要回答表达了相同的意思就算覆盖，不要求措辞完全一致。
 请只输出一个 0.0 到 1.0 之间的数字，不要输出其他任何文字。`;
 
-    const raw = await this.llm.predict(prompt);
+    const raw = await this.llm.predict(prompt, 'eval-completeness');
     return this.extractScore(raw);
   }
 

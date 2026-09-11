@@ -24,7 +24,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { vectorSearch, keywordSearch, hybridSearch } from '../chains/rag-chain.ts';
 import { pool } from '../db/postgres.ts';
-import { LlmService } from '../llm/llm.service.ts';
+import { LlmClientService } from '../llm/llm-client.service.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const EVAL_FILE = join(__dirname, './eval-set.json');
@@ -99,7 +99,7 @@ async function searchByMode(query: string, mode: Mode, k: number) {
 }
 
 // LLM 服务实例（用于语义判断召回是否命中）
-const llm = new LlmService();
+const llm = new LlmClientService();
 
 // ────────────────────────────────────────────
 // 判断是否命中（召回率判断标准 — LLM 语义评估版）
@@ -146,7 +146,7 @@ ${contextText}
 
 请只输出 yes 或 no，不要输出其他任何文字。`;
 
-  const raw = await llm.predict(prompt);
+  const raw = await llm.predict(prompt, 'eval-recall');
   return raw.trim().toLowerCase().startsWith('yes');
 }
 

@@ -21,7 +21,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { ragChainWithSources } from '../chains/rag-chain.ts';
 import { RagEvaluatorService } from './rag-evaluator.service.ts';
-import { LlmService } from '../llm/llm.service.ts';
+import { LlmClientService } from '../llm/llm-client.service.ts';
 import { pool } from '../db/postgres.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -83,7 +83,7 @@ async function main() {
   console.log(`  注意：每道题调 3 次 LLM 打分，请耐心等待\n`);
 
   // 初始化评估服务
-  const llmService = new LlmService();
+  const llmService = new LlmClientService();
   const evaluator = new RagEvaluatorService(llmService);
 
   // ── 第一步：批量生成回答 ──
