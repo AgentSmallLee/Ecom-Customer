@@ -22,6 +22,7 @@ import { fileURLToPath } from 'url';
 import { ragChainWithSources } from '../chains/rag-chain.ts';
 import { RagEvaluatorService } from './rag-evaluator.service.ts';
 import { createModel } from '../models/model-factory.ts';
+import { buildTraceConfig } from '../llm/trace-context.ts';
 import { pool } from '../db/postgres.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -95,7 +96,7 @@ async function main() {
       process.stdout.write(`  [${i + 1}/${evalSet.length}] ${item.question.slice(0, 20)}... `);
       const result = await ragChainWithSources.invoke(
         { question: item.question },
-        { metadata: { source: 'eval-generation' } }
+        buildTraceConfig('eval-generation') as any
       );
       console.log('✅ 生成完成');
       return {

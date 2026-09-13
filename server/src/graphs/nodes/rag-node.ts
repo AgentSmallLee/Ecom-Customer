@@ -4,6 +4,7 @@ import { ChatPromptTemplate }  from '@langchain/core/prompts';
 import { StringOutputParser }  from '@langchain/core/output_parsers';
 import { ragChain }            from '../../chains/rag-chain.ts';
 import { createModel }         from '../../models/model-factory.ts';
+import { buildTraceConfig }    from '../../llm/trace-context.ts';
 import { buildMemoryContext }  from '../memory-context.ts';
 import { formatMessagesAsText } from '../memory-context.ts';
 import type { GraphStateType } from '../state.ts';
@@ -39,10 +40,12 @@ const rewriteChain = rewritePrompt
 
 export const ragNode = async (state: GraphStateType, config: LangGraphRunnableConfig) => {
   const { userInput, messages = [] } = state;
-  // 从 configurable 中取 traceId（入口生成，全链路共享）
-  const traceId = config?.configurable?.traceId as string | undefined;
-  // source / traceId 放 call options 顶层，FailoverChatModel 从 options 直接读取写审计日志
-  const callOpts = (source: string) => ({ source, traceId } as any);
+  // 从 configurable 中取审计上下文（入口生成，全链路共享）
+  const traceId  = config?.configurable?.traceId   as string | undefined;
+  const userId   = config?.configurable?.user_id   as string | undefined;
+  const threadId = config?.configurable?.thread_id as string | undefined;
+  // 审计上下文 + LangSmith metadata 统一由 buildTraceConfig 生成
+  const callOpts = (source: string) => buildTraceConfig(source, { traceId, userId, threadId }) as any;
 
   try {
     // ── 1. 组装上下文（最近几轮对话 + 摘要 + 长期记忆） ──

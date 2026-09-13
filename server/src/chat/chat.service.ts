@@ -8,6 +8,7 @@ import {
   type ChatMessage,
 } from '../chains/basic-chat.ts';
 import { CHECKPOINTER } from '../common/memory/memory.module.ts';
+import { buildTraceConfig } from '../llm/trace-context.ts';
 import { withNamespace, trimMessages, DEFAULT_MAX_ROUNDS } from '../common/memory/thread-utils.ts';
 import type { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
 import {
@@ -46,20 +47,21 @@ export class ChatService {
         const input = history[history.length - 1]?.content || '';
         const pastHistory = history.slice(0, -1);
 
-        // 从 configurable 中取 traceId（每次用户请求唯一，由 chat()/stream() 生成）
+        // 从 configurable 中取审计上下文（每次用户请求唯一，由 chat()/stream() 生成）
         // 一次请求内的多次 LLM 调用共享同一个 traceId
-        const traceId = config.configurable?.traceId as string | undefined;
+        const traceId  = config.configurable?.traceId   as string | undefined;
+        const userId   = config.configurable?.user_id   as string | undefined;
+        const threadId = config.configurable?.thread_id as string | undefined;
 
-        // 流式调用：逐 token 推送，同时收集完整输出
-        // source / traceId 作为自定义 call option 传给模型层写审计日志
-        // （注意：不能用 metadata，LangChain 会把它抽走且不配 callbacks 时 runManager 为空）
+        // 审计上下文 + LangSmith metadata 统一由 buildTraceConfig 生成
+        // （metadata 供 LangSmith 按用户/会话筛选；模型侧仍读顶层字段，不受影响）
         const stream = await customerServiceStreamChain.stream(
           {
             user_input:   input,
             chat_history: formatHistory(pastHistory),
             current_time: new Date().toLocaleString('zh-CN'),
           },
-          { source: 'chat-basic', traceId } as any
+          buildTraceConfig('chat-basic', { traceId, userId, threadId }) as any
         );
         let fullOutput = '';
         for await (const chunk of stream as unknown as AsyncIterable<string>) {

@@ -3,6 +3,7 @@
 // 并用 RemoveMessage 从 checkpoint 状态中删除被压缩的旧消息（保留最近几条）。
 import { RemoveMessage } from '@langchain/core/messages';
 import { createModel }        from '../../models/model-factory.ts';
+import { buildTraceConfig }    from '../../llm/trace-context.ts';
 import { ChatPromptTemplate }  from '@langchain/core/prompts';
 import { StringOutputParser }  from '@langchain/core/output_parsers';
 import type { GraphStateType } from '../state.ts';
@@ -32,8 +33,10 @@ const chain = prompt.pipe(createModel({ temperature: 0 })).pipe(new StringOutput
 
 export const summarizeNode = async (state: GraphStateType, config: LangGraphRunnableConfig) => {
   const { messages, summary } = state;
-  // 从 configurable 中取 traceId（入口生成，全链路共享）
-  const traceId = config?.configurable?.traceId as string | undefined;
+  // 从 configurable 中取审计上下文（入口生成，全链路共享）
+  const traceId  = config?.configurable?.traceId   as string | undefined;
+  const userId   = config?.configurable?.user_id   as string | undefined;
+  const threadId = config?.configurable?.thread_id as string | undefined;
 
   const oldMessages = messages.slice(0, -KEEP_RECENT);
   if (oldMessages.length === 0) return {};
@@ -48,7 +51,7 @@ export const summarizeNode = async (state: GraphStateType, config: LangGraphRunn
         summary: summary || '（无）',
         conversation,
       },
-      { source: 'graph-summarize', traceId } as any
+      buildTraceConfig('graph-summarize', { traceId, userId, threadId }) as any
     );
 
     console.log(

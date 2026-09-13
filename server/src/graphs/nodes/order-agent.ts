@@ -6,6 +6,7 @@ import { createAgent } from 'langchain';
 import { HumanMessage, AIMessage } from '@langchain/core/messages';
 import type { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { createModel }      from '../../models/model-factory.ts';
+import { buildTraceConfig } from '../../llm/trace-context.ts';
 import { createOrderTools } from '../../tools/order-tools.ts';
 import { buildMemoryContext, formatMessagesAsText } from '../memory-context.ts';
 import type { GraphStateType, ToolStep } from '../state.ts';
@@ -52,15 +53,19 @@ export const orderAgentNode = async (
     : [new HumanMessage(userInput)];
 
   try {
-    // 从 configurable 中取 traceId（入口生成，全链路共享）
-    const traceId = config?.configurable?.traceId as string | undefined;
+    // 从 configurable 中取审计上下文（入口生成，全链路共享）
+    const traceId  = config?.configurable?.traceId   as string | undefined;
+    const userId   = config?.configurable?.user_id   as string | undefined;
+    const threadId = config?.configurable?.thread_id as string | undefined;
 
-    // 给模型预设审计上下文（source + traceId），再传入 createAgent
+    // 给模型预设审计上下文（source / traceId / userId / threadId），再传入 createAgent
     // 原因：createAgent 内部调用 LLM 时，自定义 call option 无法可靠透传，
     // 所以用 withAuditContext 把默认值写入模型实例，extractMetadata 会优先使用
     const modelWithContext = model.withAuditContext({
-      source:  'graph-order-agent',
+      source:   'graph-order-agent',
       traceId,
+      userId,
+      threadId,
     });
 
     // 动态创建 agent（每次调用都用绑定了当前用户的工具 + 审计上下文的模型）
@@ -74,6 +79,7 @@ export const orderAgentNode = async (
 
     const result = await agentAppWithContext.invoke(
       { messages: inputMessages },
+      buildTraceConfig('graph-order-agent', { traceId, userId, threadId }) as any,
     );
 
     // 从消息列表提取工具调用步骤

@@ -8,7 +8,6 @@ import { ChatGenerationChunk, ChatResult }         from '@langchain/core/outputs
 import { CallbackManagerForLLMRun }                from '@langchain/core/callbacks/manager'
 import { ChatOpenAI }                              from '@langchain/openai'
 import type { StructuredToolInterface }            from '@langchain/core/tools'
-import { TokenCounterCallback }                    from './token-counter.callback.js'
 import type { AuditLogService }                    from './audit-log.service.js'
 import { Logger }                                  from '@nestjs/common'
 
@@ -64,15 +63,17 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
   private boundTools: StructuredToolInterface[] = []
   /** 绑定时的额外选项（如 tool_choice） */
   private boundToolOptions: Record<string, any> = {}
-  /** 默认审计上下文（当 call options 中没有 source/traceId 时使用） */
+  /** 默认审计上下文（当 call options 中没有对应字段时使用） */
   private defaultSource?: string
   private defaultTraceId?: string
+  private defaultUserId?: string
+  private defaultThreadId?: string
 
   constructor(
     private readonly options: FailoverChatModelOptions,
     boundTools?: StructuredToolInterface[],
     boundToolOptions?: Record<string, any>,
-    defaults?: { source?: string; traceId?: string },
+    defaults?: { source?: string; traceId?: string; userId?: string; threadId?: string },
   ) {
     super({})
 
@@ -102,6 +103,8 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
     this.boundToolOptions = boundToolOptions ?? {}
     this.defaultSource    = defaults?.source
     this.defaultTraceId   = defaults?.traceId
+    this.defaultUserId    = defaults?.userId
+    this.defaultThreadId   = defaults?.threadId
   }
 
   /**
@@ -113,7 +116,12 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
       this.options,
       tools,
       options ?? {},
-      { source: this.defaultSource, traceId: this.defaultTraceId },
+      {
+        source:   this.defaultSource,
+        traceId:  this.defaultTraceId,
+        userId:   this.defaultUserId,
+        threadId: this.defaultThreadId,
+      },
     ) as this
   }
 
@@ -123,12 +131,17 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
    * 先给模型设置默认值，再把模型传给 createAgent，
    * 这样 agent 内部调用 LLM 时即使不传 source/traceId，也能正确写审计日志。
    */
-  withAuditContext(defaults: { source?: string; traceId?: string }): this {
+  withAuditContext(defaults: { source?: string; traceId?: string; userId?: string; threadId?: string }): this {
     return new FailoverChatModel(
       this.options,
       this.boundTools,
       this.boundToolOptions,
-      { source: defaults.source ?? this.defaultSource, traceId: defaults.traceId ?? this.defaultTraceId },
+      {
+        source:   defaults.source   ?? this.defaultSource,
+        traceId:  defaults.traceId  ?? this.defaultTraceId,
+        userId:   defaults.userId   ?? this.defaultUserId,
+        threadId: defaults.threadId ?? this.defaultThreadId,
+      },
     ) as this
   }
 
@@ -150,20 +163,22 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
     options:   this['ParsedCallOptions'],
     runManager?: CallbackManagerForLLMRun,
   ): Promise<ChatResult> {
-    const { source, traceId } = this.extractMetadata(options)
+    const { source, traceId, userId, threadId } = this.extractMetadata(options)
     const t0                  = Date.now()
     // 第一层：主模型
     const primaryResult = await this.tryGenerate(this.primaryLlm, messages, options, runManager)
     if (primaryResult) {
       this.writeAudit({
         traceId,
+        userId,
+        threadId,
         source,
         model:        this.options.primary.model,
         provider:     this.getProvider(this.options.primary.baseURL),
         isFailover:   false,
         status:       'success',
         latencyMs:    Date.now() - t0,
-        promptTokens: primaryResult.promptTokens,
+        inputTokens:  primaryResult.inputTokens,
         outputTokens: primaryResult.outputTokens,
         totalTokens:  primaryResult.totalTokens,
         messages,
@@ -178,13 +193,15 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
       if (fallbackResult) {
         this.writeAudit({
           traceId,
+          userId,
+          threadId,
           source,
           model:        this.options.fallback!.model,
           provider:     this.getProvider(this.options.fallback!.baseURL),
           isFailover:   true,
           status:       'success',
           latencyMs:    Date.now() - t0,
-          promptTokens: fallbackResult.promptTokens,
+          inputTokens:  fallbackResult.inputTokens,
           outputTokens: fallbackResult.outputTokens,
           totalTokens:  fallbackResult.totalTokens,
           messages,
@@ -197,6 +214,8 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
     this.logger.error(`[${source}] 所有模型均失败，返回静态兜底`)
     this.writeAudit({
       traceId,
+      userId,
+      threadId,
       source,
       model:        'static-fallback',
       provider:     'none',
@@ -224,11 +243,11 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
     options:   this['ParsedCallOptions'],
     runManager?: CallbackManagerForLLMRun,
   ): AsyncGenerator<ChatGenerationChunk> {
-    const { source, traceId } = this.extractMetadata(options)
+    const { source, traceId, userId, threadId } = this.extractMetadata(options)
     const t0                  = Date.now()
 
     // 第一层：主模型流式（边收边发，真正的流式）
-    const primaryStats = { promptTokens: 0, outputTokens: 0, totalTokens: 0 }
+    const primaryStats = { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
     try {
       const primaryStream = this.streamChunks(this.primaryLlm, messages, options, runManager)
       const { success, stats } = yield* this.pipeStreamWithStats(primaryStream, primaryStats)
@@ -236,13 +255,15 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
       if (success) {
         this.writeAudit({
           traceId,
+          userId,
+          threadId,
           source,
           model:        this.options.primary.model,
           provider:     this.getProvider(this.options.primary.baseURL),
           isFailover:   false,
           status:       'success',
           latencyMs:    Date.now() - t0,
-          promptTokens: stats.promptTokens,
+          inputTokens:  stats.inputTokens,
           outputTokens: stats.outputTokens,
           totalTokens:  stats.totalTokens,
           messages,
@@ -258,19 +279,21 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
       this.logger.warn(`[${source}] 主模型流式失败，切换备用模型`)
       try {
         const fallbackStream = this.streamChunks(this.fallbackLlm, messages, options, runManager)
-        const fallbackStats = { promptTokens: 0, outputTokens: 0, totalTokens: 0 }
+        const fallbackStats = { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
         const { success, stats } = yield* this.pipeStreamWithStats(fallbackStream, fallbackStats)
 
         if (success) {
           this.writeAudit({
             traceId,
+            userId,
+            threadId,
             source,
             model:        this.options.fallback!.model,
             provider:     this.getProvider(this.options.fallback!.baseURL),
             isFailover:   true,
             status:       'success',
             latencyMs:    Date.now() - t0,
-            promptTokens: stats.promptTokens,
+            inputTokens:  stats.inputTokens,
             outputTokens: stats.outputTokens,
             totalTokens:  stats.totalTokens,
             messages,
@@ -286,6 +309,8 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
     this.logger.error(`[${source}] 所有模型流式均失败，返回静态兜底`)
     this.writeAudit({
       traceId,
+      userId,
+      threadId,
       source,
       model:        'static-fallback',
       provider:     'none',
@@ -319,11 +344,12 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
     messages:   BaseMessage[],
     options:    this['ParsedCallOptions'],
     runManager?: CallbackManagerForLLMRun,
-  ): Promise<{ result: ChatResult; promptTokens: number; outputTokens: number; totalTokens: number } | null> {
-    const tokenCounter = new TokenCounterCallback()
+  ): Promise<{ result: ChatResult; inputTokens: number; outputTokens: number; totalTokens: number } | null> {
+    // callbacks 只挂 runManager，与流式路径 streamChunks 保持一致
+    // （不能再往这里塞自定义 handler：底层 _generate 不消费 options.callbacks）
     const callOptions: any = {
       ...this.stripAuditFields(options),
-      callbacks: [tokenCounter, ...(runManager ? [runManager] : [])],
+      callbacks: runManager ? [runManager] : [],
     }
 
     // 如果绑定了工具，先绑定再调用
@@ -340,11 +366,21 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
       const content = result.generations[0]?.text ?? ''
       if (!content.trim()) throw new Error('模型返回空内容')
 
+      // 直接从返回结果提取 token 用量。
+      // 注意：不能靠回调统计——底层 _generate 不会消费 options.callbacks，
+      // 传入的 handler 永远收不到 handleLLMEnd（实测触发 0 次），token 会全为 0。
+      const gen   = result.generations[0]?.message as any
+      const usage = (result.llmOutput as any)?.tokenUsage ?? gen?.usage_metadata ?? {}
+
+      const inputTokens  = usage.promptTokens     ?? usage.input_tokens  ?? 0
+      const outputTokens = usage.completionTokens ?? usage.output_tokens ?? 0
+      const totalTokens  = usage.totalTokens      ?? usage.total_tokens  ?? (inputTokens + outputTokens)
+
       return {
         result,
-        promptTokens: tokenCounter.promptTokens,
-        outputTokens: tokenCounter.outputTokens,
-        totalTokens:  tokenCounter.totalTokens,
+        inputTokens,
+        outputTokens,
+        totalTokens,
       }
     } catch (e: any) {
       const isTimeout = e.message === 'TIMEOUT'
@@ -385,7 +421,7 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
    */
   private async *pipeStreamWithStats(
     gen: AsyncGenerator<ChatGenerationChunk>,
-    stats: { promptTokens: number; outputTokens: number; totalTokens: number },
+    stats: { inputTokens: number; outputTokens: number; totalTokens: number },
   ): AsyncGenerator<ChatGenerationChunk, { success: boolean; stats: typeof stats }> {
     let fullText = ''
 
@@ -407,9 +443,9 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
         // 从 usage_metadata 累加 token
         const usage = (chunk.message as any).usage_metadata
         if (usage) {
-          stats.promptTokens = usage.input_tokens  ?? usage.prompt_tokens     ?? stats.promptTokens
+          stats.inputTokens  = usage.input_tokens  ?? usage.prompt_tokens     ?? stats.inputTokens
           stats.outputTokens = usage.output_tokens ?? usage.completion_tokens ?? stats.outputTokens
-          stats.totalTokens  = usage.total_tokens  ?? (stats.promptTokens + stats.outputTokens)
+          stats.totalTokens  = usage.total_tokens  ?? (stats.inputTokens + stats.outputTokens)
         }
       }
 
@@ -434,35 +470,48 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
     return 'unknown'
   }
 
-  /** 从 call options 中提取调用上下文（source / traceId） */
-  private extractMetadata(options: this['ParsedCallOptions']): { source: string; traceId?: string } {
+  /** 从 call options 中提取调用上下文（source / traceId / userId / threadId） */
+  private extractMetadata(options: this['ParsedCallOptions']): {
+    source: string; traceId?: string; userId?: string; threadId?: string
+  } {
     const optsAny = options as any
-    let source: string | undefined
-    let traceId: string | undefined
+    let source:   string | undefined
+    let traceId:  string | undefined
+    let userId:   string | undefined
+    let threadId: string | undefined
 
     // 优先级 1：call options 顶层（调用方直接传，如 chat.service / agent.service）
-    source  = source  ?? optsAny.source
-    traceId = traceId ?? optsAny.traceId
+    source   = source   ?? optsAny.source
+    traceId  = traceId  ?? optsAny.traceId
+    userId   = userId   ?? optsAny.userId
+    threadId = threadId ?? optsAny.threadId
 
     // 优先级 2：options.metadata（部分场景下 LangChain 会保留 metadata 在 options 中）
     const meta = optsAny.metadata
     if (meta) {
-      source  = source  ?? meta.source
-      traceId = traceId ?? meta.traceId
+      source   = source   ?? meta.source
+      traceId  = traceId  ?? meta.traceId
+      userId   = userId   ?? meta.userId
+      threadId = threadId ?? meta.threadId
     }
 
     // 优先级 3：options.configurable（LangGraph 节点通过 configurable 传递的场景）
+    // 同时兼容 LangChain 惯例命名（user_id / thread_id）
     const configurable = optsAny.configurable
     if (configurable) {
-      source  = source  ?? configurable.source
-      traceId = traceId ?? configurable.traceId
+      source   = source   ?? configurable.source
+      traceId  = traceId  ?? configurable.traceId
+      userId   = userId   ?? configurable.userId   ?? configurable.user_id
+      threadId = threadId ?? configurable.threadId ?? configurable.thread_id
     }
 
     // 优先级 4：默认值（通过 withAuditContext 预设，用于 createAgent 等无法传自定义字段的场景）
-    source  = source  ?? this.defaultSource
-    traceId = traceId ?? this.defaultTraceId
+    source   = source   ?? this.defaultSource
+    traceId  = traceId  ?? this.defaultTraceId
+    userId   = userId   ?? this.defaultUserId
+    threadId = threadId ?? this.defaultThreadId
 
-    return { source: source ?? 'unknown', traceId }
+    return { source: source ?? 'unknown', traceId, userId, threadId }
   }
 
   /**
@@ -470,20 +519,22 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
    * （这些是自定义 call option，不是 OpenAI 认识的参数）
    */
   private stripAuditFields(options: this['ParsedCallOptions']): this['ParsedCallOptions'] {
-    const { source, traceId, ...rest } = options as any
+    const { source, traceId, userId, threadId, ...rest } = options as any
     return rest
   }
 
   /** 写审计日志（异步，不阻塞） */
   private writeAudit(params: {
     traceId?:       string
+    userId?:        string
+    threadId?:      string
     source:         string
     model:          string
     provider:       string
     isFailover:     boolean
     status:         'success' | 'error' | 'timeout'
     latencyMs:      number
-    promptTokens?:  number
+    inputTokens?:   number
     outputTokens?:  number
     totalTokens?:   number
     errorMessage?:  string
@@ -498,12 +549,14 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
 
     globalAuditLog.write({
       traceId:       params.traceId,
+      userId:        params.userId,
+      threadId:      params.threadId,
       source:        params.source,
       model:         params.model,
       provider:      params.provider,
       isFailover:    params.isFailover,
       promptPreview,
-      promptTokens:  params.promptTokens,
+      inputTokens:   params.inputTokens,
       outputTokens:  params.outputTokens,
       totalTokens:   params.totalTokens,
       status:        params.status,

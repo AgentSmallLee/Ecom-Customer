@@ -2,6 +2,7 @@
 // 通用对话节点：处理订单/知识之外的闲聊、问候等
 // 流式生成，逐 token 推送到 custom 流
 import { createModel }        from '../../models/model-factory.ts';
+import { buildTraceConfig }    from '../../llm/trace-context.ts';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { buildMemoryContext } from '../memory-context.ts';
@@ -40,16 +41,18 @@ export const generalChatNode = async (
     .filter(Boolean);
 
   const writer = getWriter(config);
-  // 从 configurable 中取 traceId（入口生成，全链路共享）
-  const traceId = config?.configurable?.traceId as string | undefined;
-  // source / traceId 放 call options 顶层，FailoverChatModel 从 options 直接读取写审计日志
+  // 从 configurable 中取审计上下文（入口生成，全链路共享）
+  const traceId  = config?.configurable?.traceId   as string | undefined;
+  const userId   = config?.configurable?.user_id   as string | undefined;
+  const threadId = config?.configurable?.thread_id as string | undefined;
+  // source / traceId / userId / threadId 放 call options 顶层，FailoverChatModel 从 options 直接读取写审计日志
   const stream = await streamingChain.stream(
     {
       userInput,
       chat_history: chatHistory,
       memoryContext: buildMemoryContext(state),
     },
-    { source: 'graph-general-chat', traceId } as any
+    buildTraceConfig('graph-general-chat', { traceId, userId, threadId }) as any
   );
 
   let result = '';

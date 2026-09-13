@@ -5,12 +5,14 @@ import { PrismaService } from '../prisma/prisma.service.js'
 
 export interface AuditLogPayload {
   traceId?:       string
+  userId?:        string
+  threadId?:      string
   source:         string
   model:          string
   provider:       string
   isFailover?:    boolean
   promptPreview?: string
-    promptTokens?:  number
+    inputTokens?:   number
   outputTokens?:  number
   totalTokens?:   number
     status:         'success' | 'error' | 'timeout'
@@ -39,17 +41,21 @@ export class AuditLogService {
     source?:    string
     model?:     string
     status?:    string
+    userId?:    string
+    threadId?:  string
     startDate?: Date
     endDate?:   Date
     page?:      number
     pageSize?:  number
   }) {
-    const { source, model, status, startDate, endDate, page = 1, pageSize = 20 } = params
+    const { source, model, status, userId, threadId, startDate, endDate, page = 1, pageSize = 20 } = params
     const where: any = {}
 
-    if (source) where.source = source
-    if (model)  where.model  = model
-    if (status) where.status = status
+    if (source)   where.source   = source
+    if (model)    where.model    = model
+    if (status)   where.status   = status
+    if (userId)   where.userId   = userId
+    if (threadId) where.threadId = threadId
     if (startDate || endDate) {
       where.createdAt = {}
       if (startDate) where.createdAt.gte = startDate
@@ -80,7 +86,7 @@ export class AuditLogService {
         "model",
         COUNT(*)::int                                       AS calls,
         SUM("totalTokens")::int                             AS total_tokens,
-        SUM("promptTokens")::int                            AS prompt_tokens,
+        SUM("inputTokens")::int                             AS input_tokens,
         SUM("outputTokens")::int                            AS output_tokens,
         ROUND(AVG("latencyMs"))::int                        AS avg_latency_ms,
         COUNT(*) FILTER (WHERE "status" = 'error')::int     AS errors,

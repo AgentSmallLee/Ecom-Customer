@@ -17,6 +17,7 @@ import {
 import { ToolNode } from '@langchain/langgraph/prebuilt';
 import { createOrderTools } from '../tools/order-tools.ts';
 import { createModel } from '../models/model-factory.ts';
+import { buildTraceConfig } from '../llm/trace-context.ts';
 
 const NAMESPACE = 'agent';
 
@@ -79,10 +80,11 @@ export class AgentService {
       state: typeof MessagesAnnotation.State,
       config: LangGraphRunnableConfig,
     ) => {
-      // 从 config 取出 userId / traceId
-      const userId  = config?.configurable?.user_id  as string | undefined;
+      // 从 config 取出审计上下文
+      const userId   = config?.configurable?.user_id   as string | undefined;
+      const threadId = config?.configurable?.thread_id as string | undefined;
       // traceId：如果入口已传入则复用，否则生成一个（保证同一次用户请求内多次 LLM 调用共享）
-      const traceId = (config?.configurable?.traceId as string | undefined) || randomUUID();
+      const traceId  = (config?.configurable?.traceId as string | undefined) || randomUUID();
       const tools = createOrderTools(userId || '');
       const modelWithTools = (this.baseModel as any).bindTools(tools);
 
@@ -94,12 +96,12 @@ export class AgentService {
       const lastMsg = state.messages[state.messages.length - 1];
       const isAfterTool = lastMsg && (lastMsg as any)._getType?.() === 'tool';
       const source = isAfterTool ? 'graph-agent-tool-result' : 'graph-agent';
-      // source / traceId 作为自定义 call option 直接传顶层，FailoverChatModel 从 options 里读取写审计日志
-      // 注意：不能放 metadata 里，LangChain 会把 metadata 抽到 callback manager，模型 callOptions 里拿不到
-      const stream = await modelWithTools.stream(messagesWithSystem, {
-        source,
-        traceId,
-      } as any);
+      // 审计上下文 + LangSmith metadata 统一由 buildTraceConfig 生成
+      // （metadata 供 LangSmith 筛选；模型侧仍读顶层字段，不受影响）
+      const stream = await modelWithTools.stream(
+        messagesWithSystem,
+        buildTraceConfig(source, { traceId, userId, threadId }) as any
+      );
 
       let content = '';
       // 用字符串暂存 args，流式场景下是逐段字符串拼起来的

@@ -97,11 +97,13 @@ export class GraphService {
     // ── 异步写长期记忆（fire-and-forget，不阻塞响应） ──
     // 只需要 userInput 和 finalAnswer 就能生成记忆，不需要读完整 state
     if (finalAnswer && userId) {
+      const namespacedThreadId = withNamespace(NAMESPACE, threadId, userId);
       updateUserMemory(
         { userInput, finalAnswer },
         this.store,
         userId,
         traceId,
+        namespacedThreadId,
       ).catch((err) =>
         console.error('[GraphService][memoryWriter] 异步写入失败:', err instanceof Error ? err.message : err)
       );

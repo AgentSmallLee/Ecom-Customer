@@ -24,11 +24,12 @@ export class RagController {
   @Post('query')
   @UseGuards(AuthGuard)
   async query(
-    @Body() body: { question?: string },
-    @Req() _req: AuthenticatedRequest,
+    @Body() body: { question?: string; threadId?: string },
+    @Req() req: AuthenticatedRequest,
     @Res() res: Response,
   ): Promise<void> {
-    const { question } = body;
+    const { question, threadId } = body;
+    const userId = req.user?.userId;
 
     if (!question) {
       res.status(400).json({ error: 'question 不能为空' });
@@ -46,7 +47,9 @@ export class RagController {
     try {
       // traceId：每次请求唯一，关联本次请求内的所有 LLM 调用
       const traceId = randomUUID();
-      const stream = this.ragService.stream(question, traceId);
+      // 没传 threadId 就生成一个新的（与 chat/agent controller 保持一致）
+      const tid = threadId || randomUUID();
+      const stream = this.ragService.stream(question, traceId, userId, tid);
       let fullAnswer = '';
       let sourcesSent = false;
 

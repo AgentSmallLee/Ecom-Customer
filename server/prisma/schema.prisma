@@ -31,6 +31,8 @@ model LlmAuditLog {
 
   // 调用来源
   traceId       String?   // 请求链路 ID，关联同一次用户请求的多次 LLM 调用
+  userId        String?   // 用户 ID，来自 JWT
+  threadId      String?   // 会话 ID（命名空间化的 thread_id，与 checkpointer 一致）
   source        String    // 来源接口，如 'simple-chat' / 'rag-query' / 'react-agent'
 
   // 模型信息
@@ -40,7 +42,7 @@ model LlmAuditLog {
 
   // 调用内容
   promptPreview String?   // Prompt 前 500 字（不存全量，节省存储空间）
-  promptTokens  Int?      // 输入 Token 数
+  inputTokens   Int?      // 输入 Token 数
   outputTokens  Int?      // 输出 Token 数
   totalTokens   Int?      // 合计 Token 数
 
@@ -55,5 +57,7 @@ model LlmAuditLog {
   @@index([model, createdAt])
   @@index([status, createdAt])
   @@index([traceId])
+  @@index([userId, createdAt])
+  @@index([threadId])
   @@map("llm_audit_logs")
 }

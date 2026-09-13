@@ -4,6 +4,7 @@
 // 纯副作用节点，失败不影响主流程。
 import type { BaseStore } from '@langchain/langgraph-checkpoint';
 import { createModel } from '../../models/model-factory.ts';
+import { buildTraceConfig } from '../../llm/trace-context.ts';
 import type { GraphStateType } from '../state.ts';
 
 const MAX_MEMORIES = 10;
@@ -59,12 +60,14 @@ function parseMemoryArray(text: string): string[] {
  * @param store - 长期记忆存储实例
  * @param userId - 用户 ID（用于命名空间隔离）
  * @param traceId - 可选，链路追踪 ID，关联本次用户请求
+ * @param threadId - 可选，会话 ID，写入审计日志便于关联
  */
 export const updateUserMemory = async (
   state: Pick<GraphStateType, 'userInput' | 'finalAnswer'>,
   store: BaseStore,
   userId: string,
   traceId?: string,
+  threadId?: string,
 ) => {
   const { userInput, finalAnswer } = state;
   if (!userInput || !finalAnswer) return;
@@ -100,7 +103,7 @@ ${existingTexts.length ? existingTexts.map((t) => `- ${t}`).join('\n') : '（无
         ['system', systemPrompt],
         ['human', userPrompt],
       ],
-      { source: 'graph-memory-writer', traceId } as any
+      buildTraceConfig('graph-memory-writer', { traceId, userId, threadId }) as any
     );
 
     const responseText = typeof response.content === 'string'

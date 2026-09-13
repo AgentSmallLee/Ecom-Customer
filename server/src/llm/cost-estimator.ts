@@ -10,11 +10,11 @@ const PRICE_TABLE: Record<string, { input: number; output: number }> = {
 
 export function estimateCost(
   model: string,
-  promptTokens: number,
+  inputTokens: number,
   outputTokens: number,
 ): { inputCost: number; outputCost: number; totalCost: number; unit: string } {
   const price = PRICE_TABLE[model] ?? { input: 0, output: 0 }
-  const inputCost = (promptTokens / 1000) * price.input
+  const inputCost = (inputTokens / 1000) * price.input
   const outputCost = (outputTokens / 1000) * price.output
   return {
     inputCost: parseFloat(inputCost.toFixed(6)),
