@@ -24,9 +24,10 @@ export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
 /**
  * 开发环境初始化：写入开发用 token，假装是从用户中心拿到的
+ * 每次都覆盖：避免本地残留的旧 token（字段/签名与当前后端不一致）导致接口 401
  * 接入真实登录后删除这段逻辑
  */
-if (IS_DEV && !getToken()) {
+if (IS_DEV) {
   setToken(DEV_TOKEN);
   console.warn('[request] 开发环境：使用默认开发 token');
 }

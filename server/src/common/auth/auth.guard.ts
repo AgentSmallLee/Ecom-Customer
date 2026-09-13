@@ -23,19 +23,9 @@ export class AuthGuard implements CanActivate {
 
     const token = authHeader.slice(7);
 
+    let payload: AuthenticatedUser & jwt.JwtPayload;
     try {
-      const payload = jwt.verify(token, secret) as AuthenticatedUser & jwt.JwtPayload;
-
-      if (!payload.userId) {
-        throw new UnauthorizedException('Token 无效');
-      }
-
-      request.user = {
-        userId:   payload.userId,
-        username: payload.username,
-      };
-
-      return true;
+      payload = jwt.verify(token, secret) as AuthenticatedUser & jwt.JwtPayload;
     } catch (err) {
       // jsonwebtoken 在 ESM 模式下命名导出异常类不可靠，用 name 判断
       const errName = (err as Error)?.name;
@@ -47,6 +37,18 @@ export class AuthGuard implements CanActivate {
       }
       throw new UnauthorizedException('认证失败');
     }
+
+    // 校验放在 try 外：否则这里抛出的 UnauthorizedException 会被上面的 catch 吞掉
+    if (!payload.userId) {
+      throw new UnauthorizedException('Token 无效，请重新登录');
+    }
+
+    request.user = {
+      userId:   payload.userId,
+      username: payload.username,
+    };
+
+    return true;
   }
 }
 
