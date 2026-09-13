@@ -8,6 +8,7 @@
         <router-link to="/agent">订单查询</router-link>
         <router-link to="/rag">商品咨询</router-link>
         <router-link to="/graph">智能客服</router-link>
+        <router-link to="/llm">LLM 监控</router-link>
       </div>
     </nav>
     <router-view />

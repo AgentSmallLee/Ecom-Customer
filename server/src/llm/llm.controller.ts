@@ -29,13 +29,16 @@ export class LlmController {
     @Query('source')    source?:    string,
     @Query('model')     model?:     string,
     @Query('status')    status?:    string,
+    @Query('userId')    userId?:    string,
+    @Query('threadId')  threadId?:  string,
+    @Query('traceId')   traceId?:   string,
     @Query('startDate') startDate?: string,
     @Query('endDate')   endDate?:   string,
     @Query('page')      page?:      string,
     @Query('pageSize')  pageSize?:  string,
   ) {
     return this.auditLog.query({
-      source, model, status,
+      source, model, status, userId, threadId, traceId,
       startDate: startDate ? new Date(startDate) : undefined,
       endDate:   endDate   ? new Date(endDate)   : undefined,
       page:      page      ? parseInt(page)      : 1,

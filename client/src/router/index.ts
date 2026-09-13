@@ -4,6 +4,7 @@ import ChatView  from '../views/ChatView.vue';
 import AgentView from '../views/AgentView.vue';
 import RagView   from '../views/RagView.vue';
 import GraphView from '../views/GraphView.vue';
+import LlmView   from '../views/LlmView.vue';
 import 'vue-router';
 
 declare module 'vue-router' {
@@ -17,6 +18,7 @@ const routes = [
   { path: '/agent',  component: AgentView, meta: { title: 'Agent 订单查询' } },
   { path: '/rag',    component: RagView,   meta: { title: '商品咨询' } },
   { path: '/graph',  component: GraphView, meta: { title: '智能客服' } },
+  { path: '/llm',    component: LlmView,   meta: { title: 'LLM 监控' } },
 ];
 
 export default createRouter({

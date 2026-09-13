@@ -12,10 +12,10 @@ export interface AuditLogPayload {
   provider:       string
   isFailover?:    boolean
   promptPreview?: string
-    inputTokens?:   number
+  inputTokens?:   number
   outputTokens?:  number
   totalTokens?:   number
-    status:         'success' | 'error' | 'timeout'
+  status:         'success' | 'error' | 'timeout'
   latencyMs:      number
   errorMessage?:  string
 }
@@ -38,24 +38,26 @@ export class AuditLogService {
 
   // 分页查询调用记录
   async query(params: {
-    source?:    string
-    model?:     string
-    status?:    string
-    userId?:    string
-    threadId?:  string
-    startDate?: Date
-    endDate?:   Date
-    page?:      number
-    pageSize?:  number
+    source?:     string
+    model?:      string
+    status?:     string
+    userId?:     string
+    threadId?:   string
+    traceId?:    string
+    startDate?:  Date
+    endDate?:    Date
+    page?:       number
+    pageSize?:   number
   }) {
-    const { source, model, status, userId, threadId, startDate, endDate, page = 1, pageSize = 20 } = params
+    const { source, model, status, userId, threadId, traceId, startDate, endDate, page = 1, pageSize = 20 } = params
     const where: any = {}
 
-    if (source)   where.source   = source
-    if (model)    where.model    = model
-    if (status)   where.status   = status
-    if (userId)   where.userId   = userId
-    if (threadId) where.threadId = threadId
+    if (source)     where.source   = source
+    if (model)      where.model    = model
+    if (status)     where.status   = status
+    if (userId)     where.userId   = userId
+    if (threadId)   where.threadId = threadId
+    if (traceId)    where.traceId  = traceId
     if (startDate || endDate) {
       where.createdAt = {}
       if (startDate) where.createdAt.gte = startDate

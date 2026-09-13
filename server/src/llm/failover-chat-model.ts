@@ -34,6 +34,11 @@ export interface FailoverChatModelOptions {
   streaming?: boolean
 }
 
+/** 单次模型尝试的结果：成功带统计，失败保留原因（超时/其他错误可区分） */
+type TryOutcome =
+  | { ok: true;  result: ChatResult; inputTokens: number; outputTokens: number; totalTokens: number }
+  | { ok: false; errorMessage: string; isTimeout: boolean }
+
 /** 全局审计日志引用，所有 FailoverChatModel 实例共享 */
 let globalAuditLog: AuditLogService | null = null
 
@@ -166,8 +171,9 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
     const { source, traceId, userId, threadId } = this.extractMetadata(options)
     const t0                  = Date.now()
     // 第一层：主模型
-    const primaryResult = await this.tryGenerate(this.primaryLlm, messages, options, runManager)
-    if (primaryResult) {
+    const primaryT0      = Date.now()
+    const primaryOutcome = await this.tryGenerate(this.primaryLlm, messages, options, runManager)
+    if (primaryOutcome.ok) {
       this.writeAudit({
         traceId,
         userId,
@@ -178,19 +184,34 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
         isFailover:   false,
         status:       'success',
         latencyMs:    Date.now() - t0,
-        inputTokens:  primaryResult.inputTokens,
-        outputTokens: primaryResult.outputTokens,
-        totalTokens:  primaryResult.totalTokens,
+        inputTokens:  primaryOutcome.inputTokens,
+        outputTokens: primaryOutcome.outputTokens,
+        totalTokens:  primaryOutcome.totalTokens,
         messages,
       })
-      return primaryResult.result
+      return primaryOutcome.result
     }
+    // 主模型失败：先补写一条该模型自身的失败记录，再继续降级
+    this.writeAudit({
+      traceId,
+      userId,
+      threadId,
+      source,
+      model:        this.options.primary.model,
+      provider:     this.getProvider(this.options.primary.baseURL),
+      isFailover:   false,
+      status:       primaryOutcome.isTimeout ? 'timeout' : 'error',
+      latencyMs:    Date.now() - primaryT0,
+      errorMessage: primaryOutcome.errorMessage,
+      messages,
+    })
 
     // 第二层：备用模型
     if (this.fallbackLlm) {
       this.logger.warn(`[${source}] 主模型失败，切换备用模型`)
-      const fallbackResult = await this.tryGenerate(this.fallbackLlm, messages, options, runManager)
-      if (fallbackResult) {
+      const fallbackT0      = Date.now()
+      const fallbackOutcome = await this.tryGenerate(this.fallbackLlm, messages, options, runManager)
+      if (fallbackOutcome.ok) {
         this.writeAudit({
           traceId,
           userId,
@@ -201,13 +222,27 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
           isFailover:   true,
           status:       'success',
           latencyMs:    Date.now() - t0,
-          inputTokens:  fallbackResult.inputTokens,
-          outputTokens: fallbackResult.outputTokens,
-          totalTokens:  fallbackResult.totalTokens,
+          inputTokens:  fallbackOutcome.inputTokens,
+          outputTokens: fallbackOutcome.outputTokens,
+          totalTokens:  fallbackOutcome.totalTokens,
           messages,
         })
-        return fallbackResult.result
+        return fallbackOutcome.result
       }
+      // 备用模型也失败：同样补写一条失败记录
+      this.writeAudit({
+        traceId,
+        userId,
+        threadId,
+        source,
+        model:        this.options.fallback!.model,
+        provider:     this.getProvider(this.options.fallback!.baseURL),
+        isFailover:   true,
+        status:       fallbackOutcome.isTimeout ? 'timeout' : 'error',
+        latencyMs:    Date.now() - fallbackT0,
+        errorMessage: fallbackOutcome.errorMessage,
+        messages,
+      })
     }
 
     // 第三层：静态兜底
@@ -248,6 +283,7 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
 
     // 第一层：主模型流式（边收边发，真正的流式）
     const primaryStats = { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
+    const primaryT0    = Date.now()
     try {
       const primaryStream = this.streamChunks(this.primaryLlm, messages, options, runManager)
       const { success, stats } = yield* this.pipeStreamWithStats(primaryStream, primaryStats)
@@ -271,12 +307,29 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
         return
       }
     } catch (e) {
-      this.logger.warn(`[${source}] 主模型流式失败: ${e instanceof Error ? e.message : String(e)}`)
+      const isTimeout    = e instanceof Error && e.message === 'TIMEOUT'
+      const errorMessage = e instanceof Error ? e.message : String(e)
+      this.logger.warn(`[${source}] 主模型流式失败: ${errorMessage}`)
+      // 主模型流式失败：补写一条该模型自身的失败记录，再继续降级
+      this.writeAudit({
+        traceId,
+        userId,
+        threadId,
+        source,
+        model:        this.options.primary.model,
+        provider:     this.getProvider(this.options.primary.baseURL),
+        isFailover:   false,
+        status:       isTimeout ? 'timeout' : 'error',
+        latencyMs:    Date.now() - primaryT0,
+        errorMessage,
+        messages,
+      })
     }
 
     // 第二层：备用模型流式
     if (this.fallbackLlm) {
       this.logger.warn(`[${source}] 主模型流式失败，切换备用模型`)
+      const fallbackT0 = Date.now()
       try {
         const fallbackStream = this.streamChunks(this.fallbackLlm, messages, options, runManager)
         const fallbackStats = { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
@@ -301,7 +354,23 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
           return
         }
       } catch (e) {
-        this.logger.warn(`[${source}] 备用模型流式失败: ${e instanceof Error ? e.message : String(e)}`)
+        const isTimeout    = e instanceof Error && e.message === 'TIMEOUT'
+        const errorMessage = e instanceof Error ? e.message : String(e)
+        this.logger.warn(`[${source}] 备用模型流式失败: ${errorMessage}`)
+        // 备用模型流式也失败：同样补写一条失败记录
+        this.writeAudit({
+          traceId,
+          userId,
+          threadId,
+          source,
+          model:        this.options.fallback!.model,
+          provider:     this.getProvider(this.options.fallback!.baseURL),
+          isFailover:   true,
+          status:       isTimeout ? 'timeout' : 'error',
+          latencyMs:    Date.now() - fallbackT0,
+          errorMessage,
+          messages,
+        })
       }
     }
 
@@ -338,13 +407,13 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
     return llm.bindTools(this.boundTools, this.boundToolOptions) as unknown as ChatOpenAI
   }
 
-  /** 尝试用单个模型非流式生成，失败返回 null */
+  /** 尝试用单个模型非流式生成，失败返回带失败原因的结果 */
   private async tryGenerate(
     llm:        ChatOpenAI,
     messages:   BaseMessage[],
     options:    this['ParsedCallOptions'],
     runManager?: CallbackManagerForLLMRun,
-  ): Promise<{ result: ChatResult; inputTokens: number; outputTokens: number; totalTokens: number } | null> {
+  ): Promise<TryOutcome> {
     // callbacks 只挂 runManager，与流式路径 streamChunks 保持一致
     // （不能再往这里塞自定义 handler：底层 _generate 不消费 options.callbacks）
     const callOptions: any = {
@@ -377,6 +446,7 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
       const totalTokens  = usage.totalTokens      ?? usage.total_tokens  ?? (inputTokens + outputTokens)
 
       return {
+        ok: true,
         result,
         inputTokens,
         outputTokens,
@@ -387,7 +457,11 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
       this.logger.warn(
         `模型 ${llm.model} ${isTimeout ? '超时' : '失败'}: ${e.message}`
       )
-      return null
+      return {
+        ok: false,
+        errorMessage: e.message ?? String(e),
+        isTimeout,
+      }
     }
   }
 
