@@ -7,6 +7,7 @@ import { PGVectorStore }       from '@langchain/community/vectorstores/pgvector'
 import { createModel }         from '../models/model-factory.ts';
 import { embeddings }          from '../models/embedding.ts';
 import { pool }                from '../db/postgres.ts';
+import { createBm25Index, type Bm25Index } from './bm25.ts';
 
 // ── 混合检索配置 ──
 const HYBRID_K = 10;   // 每路召回数量（比最终 top-k 大，给 RRF 留融合空间）
@@ -15,8 +16,8 @@ const RRF_K    = 60;   // RRF 公式常数，经验值 60
 
 /**
  * 两路召回各用独立类型，字段名自带方向语义，避免「同名不同向」的误读：
- * - VectorHit.distance  是余弦距离，越小越相关
- * - KeywordHit.hitRatio 是字符命中率，越大越相关
+ * - VectorHit.distance 是余弦距离，越小越相关
+ * - KeywordHit.score   是 BM25 分数，越大越相关
  * RRF 只用排名、不用分数，所以方向差异不影响融合结果。
  */
 interface VectorHit {
@@ -25,8 +26,8 @@ interface VectorHit {
 }
 
 interface KeywordHit {
-  doc:      Document;
-  hitRatio: number;
+  doc:   Document;
+  score: number;
 }
 
 /** 单路召回数量：比最终 top-k 大，给 RRF 留融合空间 */
@@ -46,40 +47,35 @@ const PG_CONFIG = {
 // 初始化 VectorStore（模块加载时执行一次）
 const vectorStore = await PGVectorStore.initialize(embeddings, PG_CONFIG);
 
-// ── 关键词检索（ILIKE 关键词匹配 + 命中率打分）──
-// 中文场景下最直接的关键词检索方式，无需分词、无需额外扩展
-// 打分规则：统计查询中的字符在 content 中命中的比例，命中率越高越相关
-async function keywordSearchWithScore(query: string, k: number): Promise<KeywordHit[]> {
-  // 提取查询中的有效字符（去重、去掉空格和标点）
-  const chars = [...new Set(query.replace(/[\s\p{P}]/gu, '').split(''))];
-  if (chars.length === 0) return [];
+/**
+ * 释放 PGVectorStore 长期占用的连接并关闭连接池（脚本收尾用）
+ *
+ * PGVectorStore.initialize() 内部会 pool.connect() 占住一个 client 不释放，
+ * 直接调 pool.end() 会一直等这个 client 归还，进程永远退不出去。
+ */
+export const closeVectorStore = () => vectorStore.end();
 
-  // 构建命中打分 SQL：每个字符命中得 1 分，总分 / 字符数 = 命中率
-  const scoreExpr = chars.map((_, i) =>
-    `CASE WHEN content ILIKE $${i + 1} THEN 1 ELSE 0 END`
-  ).join(' + ');
+// ── 关键词检索（BM25，中文 bigram 分词）──
+// 语料是商品/政策知识库，条数不多，启动后首次查询时全量载入内存建一次索引，
+// 词频、文档长度、IDF 都由 BM25 负责；知识库更新后重启服务即可重建索引。
+let keywordIndexPromise: Promise<Bm25Index> | null = null;
 
-  const params = chars.map((c) => `%${c}%`);
-  params.push(String(k));
-
-  const { rows } = await pool.query(
-    `SELECT id, content, metadata,
-            (${scoreExpr})::float / ${chars.length} AS rank
-     FROM knowledge_embeddings
-     WHERE (${scoreExpr}) > 0
-     ORDER BY rank DESC
-     LIMIT $${chars.length + 1}`,
-    [...params]
-  );
-
-  // 保留 SQL 里算出的命中率（此前这里直接丢掉了）
-  return rows.map((row) => ({
-    doc: new Document({
+async function getKeywordIndex(): Promise<Bm25Index> {
+  keywordIndexPromise ??= (async () => {
+    const { rows } = await pool.query('SELECT content, metadata FROM knowledge_embeddings');
+    const docs = rows.map((row) => new Document({
       pageContent: row.content,
-      metadata:    row.metadata,
-    }),
-    hitRatio: Number(row.rank),
-  }));
+      metadata:    row.metadata ?? {},
+    }));
+    console.log(`[bm25] 关键词索引已构建：${docs.length} 篇文档`);
+    return createBm25Index(docs);
+  })();
+  return keywordIndexPromise;
+}
+
+async function keywordSearchWithScore(query: string, k: number): Promise<KeywordHit[]> {
+  const index = await getKeywordIndex();
+  return index.search(query, k).map((hit) => ({ doc: hit.doc, score: hit.score }));
 }
 
 /** 关键词检索（只要文档，保持原有对外签名，供评测脚本调用） */
@@ -138,7 +134,7 @@ function rrfFusionWithScore(vectorHits: VectorHit[], keywordHits: KeywordHit[], 
     const rank  = i + 1;
     const entry = accumulate(hit.doc, rank);
     entry.keywordRank  = rank;
-    entry.keywordScore = hit.hitRatio;
+    entry.keywordScore = hit.score;
   });
 
   return Array.from(acc.values())
@@ -187,7 +183,7 @@ const vectorRecallStep = RunnableLambda.from(
   async (input: { question: string }) => vectorSearchWithScore(input.question, RECALL_K)
 ).withConfig({ runName: 'rag-vector-recall' });
 
-/** 关键词召回（带命中率分数）；失败不阻断主流程，退化为空数组 */
+/** 关键词召回（带 BM25 分数）；失败不阻断主流程，退化为空数组 */
 const keywordRecallStep = RunnableLambda.from(
   async (input: { question: string }) =>
     keywordSearchWithScore(input.question, RECALL_K).catch((err) => {
