@@ -8,6 +8,7 @@ import { ChatGenerationChunk, ChatResult }         from '@langchain/core/outputs
 import { CallbackManagerForLLMRun }                from '@langchain/core/callbacks/manager'
 import { ChatOpenAI }                              from '@langchain/openai'
 import type { StructuredToolInterface }            from '@langchain/core/tools'
+import { convertToOpenAITool }                      from '@langchain/core/utils/function_calling'
 import type { AuditLogService }                    from './audit-log.service.js'
 import { Logger }                                  from '@nestjs/common'
 
@@ -68,6 +69,8 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
   private boundTools: StructuredToolInterface[] = []
   /** 绑定时的额外选项（如 tool_choice） */
   private boundToolOptions: Record<string, any> = {}
+  /** 绑定工具转换后的 OpenAI 工具定义，随 call options 传给底层模型 */
+  private readonly openAITools: Record<string, any>[]
   /** 默认审计上下文（当 call options 中没有对应字段时使用） */
   private defaultSource?: string
   private defaultTraceId?: string
@@ -106,6 +109,7 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
     this.timeoutMs        = options.timeoutMs ?? 30_000
     this.boundTools       = boundTools ?? []
     this.boundToolOptions = boundToolOptions ?? {}
+    this.openAITools      = this.boundTools.map((t) => convertToOpenAITool(t))
     this.defaultSource    = defaults?.source
     this.defaultTraceId   = defaults?.traceId
     this.defaultUserId    = defaults?.userId
@@ -399,12 +403,32 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
   // ── 内部工具方法 ─────────────────────────────────────
 
   /**
-   * 获取绑定了工具的底层模型实例（如果有绑定的工具）
-   * 没有绑定工具时直接返回原模型
+   * 组装底层模型的调用参数
+   *
+   * 绑定的工具必须显式塞进 call options：ChatOpenAI.bindTools() 返回的是 RunnableBinding，
+   * 它把 tools 放在绑定层的 kwargs 里，只有走 invoke/stream 才会合并；
+   * 而这里为了拿 ChatResult / 流式 chunk，是直接调 _generate / _streamResponseChunks，
+   * 走绑定层会把 tools 丢掉（模型收不到工具定义，只能把调用意图吐成文本）。
    */
-  private getBoundLlm(llm: ChatOpenAI): ChatOpenAI {
-    if (this.boundTools.length === 0) return llm
-    return llm.bindTools(this.boundTools, this.boundToolOptions) as unknown as ChatOpenAI
+  private buildCallOptions(
+    options:     this['ParsedCallOptions'],
+    runManager?: CallbackManagerForLLMRun,
+  ): any {
+    // callbacks 只挂 runManager，与审计统计口径保持一致
+    // （不能再往这里塞自定义 handler：底层 _generate 不消费 options.callbacks）
+    const callOptions: any = {
+      ...this.stripAuditFields(options),
+      callbacks: runManager ? [runManager] : [],
+    }
+
+    if (this.openAITools.length > 0) {
+      callOptions.tools = this.openAITools
+      if (this.boundToolOptions.tool_choice) {
+        callOptions.tool_choice = this.boundToolOptions.tool_choice
+      }
+    }
+
+    return callOptions
   }
 
   /** 尝试用单个模型非流式生成，失败返回带失败原因的结果 */
@@ -414,31 +438,25 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
     options:    this['ParsedCallOptions'],
     runManager?: CallbackManagerForLLMRun,
   ): Promise<TryOutcome> {
-    // callbacks 只挂 runManager，与流式路径 streamChunks 保持一致
-    // （不能再往这里塞自定义 handler：底层 _generate 不消费 options.callbacks）
-    const callOptions: any = {
-      ...this.stripAuditFields(options),
-      callbacks: runManager ? [runManager] : [],
-    }
-
-    // 如果绑定了工具，先绑定再调用
-    const boundLlm = this.getBoundLlm(llm)
+    const callOptions = this.buildCallOptions(options, runManager)
 
     try {
-      const callPromise    = boundLlm._generate(messages, callOptions, runManager)
+      const callPromise    = llm._generate(messages, callOptions, runManager)
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('TIMEOUT')), this.timeoutMs)
       )
       const result = await Promise.race([callPromise, timeoutPromise])
 
-      // 内容校验
-      const content = result.generations[0]?.text ?? ''
-      if (!content.trim()) throw new Error('模型返回空内容')
+      // 内容校验：只返回 tool_calls、正文为空是 function calling 的正常返回，不能当失败
+      const firstGen     = result.generations[0]
+      const content      = firstGen?.text ?? ''
+      const hasToolCalls = ((firstGen?.message as any)?.tool_calls?.length ?? 0) > 0
+      if (!content.trim() && !hasToolCalls) throw new Error('模型返回空内容')
 
       // 直接从返回结果提取 token 用量。
       // 注意：不能靠回调统计——底层 _generate 不会消费 options.callbacks，
       // 传入的 handler 永远收不到 handleLLMEnd（实测触发 0 次），token 会全为 0。
-      const gen   = result.generations[0]?.message as any
+      const gen   = firstGen?.message as any
       const usage = (result.llmOutput as any)?.tokenUsage ?? gen?.usage_metadata ?? {}
 
       const inputTokens  = usage.promptTokens     ?? usage.input_tokens  ?? 0
@@ -472,14 +490,8 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
     options:    this['ParsedCallOptions'],
     runManager?: CallbackManagerForLLMRun,
   ): AsyncGenerator<ChatGenerationChunk> {
-    const callOptions: any = {
-      ...this.stripAuditFields(options),
-      callbacks: runManager ? [runManager] : [],
-    }
-
-    // 如果绑定了工具，先绑定再调用
-    const boundLlm = this.getBoundLlm(llm)
-    const stream = boundLlm._streamResponseChunks(messages, callOptions, runManager)
+    const callOptions = this.buildCallOptions(options, runManager)
+    const stream = llm._streamResponseChunks(messages, callOptions, runManager)
     for await (const chunk of stream) {
       yield chunk
     }
@@ -497,7 +509,8 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
     gen: AsyncGenerator<ChatGenerationChunk>,
     stats: { inputTokens: number; outputTokens: number; totalTokens: number },
   ): AsyncGenerator<ChatGenerationChunk, { success: boolean; stats: typeof stats }> {
-    let fullText = ''
+    let fullText   = ''
+    let sawToolCall = false
 
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('TIMEOUT')), this.timeoutMs)
@@ -514,6 +527,12 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
         yield chunk
         fullText += chunk.text
 
+        // 记录是否出现工具调用：纯 tool_calls 的流式返回正文为空，不能当失败
+        const chunkMessage = chunk.message as any
+        if ((chunkMessage?.tool_calls?.length ?? 0) > 0 || (chunkMessage?.tool_call_chunks?.length ?? 0) > 0) {
+          sawToolCall = true
+        }
+
         // 从 usage_metadata 累加 token
         const usage = (chunk.message as any).usage_metadata
         if (usage) {
@@ -523,7 +542,7 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
         }
       }
 
-      if (!fullText.trim()) throw new Error('模型返回空内容')
+      if (!fullText.trim() && !sawToolCall) throw new Error('模型返回空内容')
 
       return { success: true, stats }
     } catch (e: any) {
