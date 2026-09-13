@@ -1,5 +1,5 @@
-<!-- client/src/views/LlmView.vue -->
-<!-- LLM 监控台：模型健康 / 失败率 / 调用审计日志（支持过滤与分页）/ Token 用量统计 -->
+<!-- monitor/src/App.vue -->
+<!-- LLM 监控台（独立应用）：模型健康 / 失败率 / 调用审计日志（支持过滤与分页）/ Token 用量统计 -->
 <template>
   <div class="llm-page">
     <header class="page-header">
@@ -246,13 +246,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { request } from '../utils/request.ts';
+import { request } from './utils/request.ts';
 import type {
   LlmHealthStatus,
   LlmFailureRate,
   LlmAuditLogPage,
   LlmTokenStat,
-} from '../types.ts';
+} from './types.ts';
 
 const error   = ref('');
 const loading = ref(false);
