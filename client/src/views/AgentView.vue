@@ -116,6 +116,8 @@ const formatInput = (input: ToolStep['toolInput']) => {
 .agent-page {
   display: flex;
   flex-direction: column;
+  /* 显式 width:100%，否则 column flex 父级 + margin:0 auto 会让页面宽度跟着内容塌缩 */
+  width: 100%;
   height: 100vh;
   max-width: 780px;
   margin: 0 auto;

@@ -154,6 +154,10 @@ const handleQuickQuestion = (q: string) => {
 .chat-page {
   display: flex;
   flex-direction: column;
+  /* 必须显式 width:100%：父级 #app 是 column flex 容器，
+     配合 margin:0 auto 会抑制 align-items:stretch，页面宽度会变成"内容宽度"，
+     思考期间内容变少时整条 footer（含输入框）会一起塌缩 */
+  width: 100%;
   height: 100vh;
   max-width: 780px;
   margin: 0 auto;

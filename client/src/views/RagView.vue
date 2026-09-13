@@ -116,6 +116,7 @@ const handleQuick = (q: string) => {
 <style scoped>
 .rag-page {
   display: flex; flex-direction: column;
+  width: 100%; /* 显式宽度，避免 column flex 父级 + margin:auto 导致页面宽度随内容塌缩 */
   height: 100vh; max-width: 780px;
   margin: 0 auto; background: #f8fafc;
   font-family: -apple-system, 'PingFang SC', sans-serif;
