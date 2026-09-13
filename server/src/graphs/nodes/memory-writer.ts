@@ -3,52 +3,66 @@
 // 重新生成该用户的记忆列表，diff 写回 Store（新增 put、消失 delete）。
 // 纯副作用节点，失败不影响主流程。
 import type { BaseStore } from '@langchain/langgraph-checkpoint';
+import type { AIMessage } from '@langchain/core/messages';
+import { tool } from '@langchain/core/tools';
+import { z } from 'zod';
 import { createModel } from '../../models/model-factory.ts';
 import { buildTraceConfig } from '../../llm/trace-context.ts';
 import type { GraphStateType } from '../state.ts';
 
 const MAX_MEMORIES = 10;
 
-// 用 temperature=0 的模型保证输出稳定
-const model = createModel({ temperature: 0 });
+/** 记忆提取的输出契约：模型按这个 schema 输出，本地再校验一次 */
+const MemorySchema = z.object({
+  memories: z.array(z.string()).describe('更新后的用户长期记忆列表，每条一句话'),
+});
+
+/** 用 function calling 做结构化提取：schema 交给模型侧约束，避免事后解析自由文本 */
+const saveMemoriesTool = tool(async () => 'ok', {
+  name: 'save_memories',
+  description: '保存更新后的用户长期记忆列表',
+  schema:   MemorySchema,
+});
+
+// 用 temperature=0 的模型保证输出稳定，并绑定提取工具
+const model = createModel({ temperature: 0 }).bindTools([saveMemoriesTool]);
 
 /** 记忆条目使用确定性 key，重复事实 upsert 而不是重复插入 */
 const memoryKey = (text: string) => `m_${text.slice(0, 60)}`;
 
 /**
- * 从模型输出中解析 JSON 数组
- * 兼容：直接数组、markdown code block、包裹在其他文本中
+ * 兜底解析：模型没走工具调用时（如降级到静态兜底或直接吐 JSON 文本），
+ * 从文本里捞出 JSON 再用同一个 schema 校验
  */
-function parseMemoryArray(text: string): string[] {
-  // 1. 尝试直接解析 JSON 数组
-  try {
-    const parsed = JSON.parse(text.trim());
-    if (Array.isArray(parsed)) {
-      return parsed.filter((s): s is string => typeof s === 'string');
-    }
-  } catch { /* 不是纯 JSON，继续尝试 */ }
+function parseMemoriesFromText(text: string): string[] {
+  const candidates = [text.trim()];
 
-  // 2. 尝试提取 ```json ... ``` 代码块
+  // ```json ... ``` 代码块
   const codeBlock = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (codeBlock?.[1]) {
-    try {
-      const parsed = JSON.parse(codeBlock[1].trim());
-      if (Array.isArray(parsed)) {
-        return parsed.filter((s): s is string => typeof s === 'string');
-      }
-    } catch { /* 解析失败继续 */ }
-  }
+  if (codeBlock?.[1]) candidates.push(codeBlock[1].trim());
 
-  // 3. 尝试提取第一个 [ 到最后一个 ] 之间的内容
-  const firstBracket = text.indexOf('[');
-  const lastBracket = text.lastIndexOf(']');
-  if (firstBracket >= 0 && lastBracket > firstBracket) {
+  // 第一个 { 到最后一个 }、第一个 [ 到最后一个 ]
+  const objStart = text.indexOf('{');
+  const objEnd   = text.lastIndexOf('}');
+  if (objStart >= 0 && objEnd > objStart) candidates.push(text.slice(objStart, objEnd + 1));
+  const arrStart = text.indexOf('[');
+  const arrEnd   = text.lastIndexOf(']');
+  if (arrStart >= 0 && arrEnd > arrStart) candidates.push(text.slice(arrStart, arrEnd + 1));
+
+  for (const candidate of candidates) {
     try {
-      const parsed = JSON.parse(text.slice(firstBracket, lastBracket + 1));
-      if (Array.isArray(parsed)) {
-        return parsed.filter((s): s is string => typeof s === 'string');
-      }
-    } catch { /* 解析失败 */ }
+      const parsed = JSON.parse(candidate);
+      const list = Array.isArray(parsed) ? parsed : parsed?.memories;
+      if (!Array.isArray(list)) continue;
+
+      // 兼容模型自造的 { content: "..." } 结构
+      const texts = list
+        .map((item) => (typeof item === 'string' ? item : item?.content))
+        .filter((item): item is string => typeof item === 'string');
+
+      const result = MemorySchema.safeParse({ memories: texts });
+      if (result.success) return result.data.memories;
+    } catch { /* 换下一种候选文本继续试 */ }
   }
 
   return [];
@@ -86,8 +100,8 @@ export const updateUserMemory = async (
 - 不要保留一次性问题（如某个订单的即时查询）、寒暄和临时信息
 - 已有记忆若无变化则原样保留，新增值得记住的事实就加入
 - 最多 ${MAX_MEMORIES} 条，每条一句话
-- **只输出 JSON 数组，不要任何其他文字、不要 markdown 格式、不要解释**
-- 正确示例：["用户喜欢红色","用户穿L码","用户对坚果过敏"]`;
+- **必须调用 save_memories 工具提交结果**，不要用文字回答
+- 若确实无法调用工具，则只输出 JSON 对象：{"memories":["用户喜欢红色"]}，不要任何其他文字`;
 
     const userPrompt = `已有记忆：
 ${existingTexts.length ? existingTexts.map((t) => `- ${t}`).join('\n') : '（无）'}
@@ -96,7 +110,7 @@ ${existingTexts.length ? existingTexts.map((t) => `- ${t}`).join('\n') : '（无
 用户: ${userInput}
 客服: ${finalAnswer}
 
-请输出更新后的记忆列表（JSON 数组）：`;
+请调用 save_memories 提交更新后的记忆列表：`;
 
     const response = await model.invoke(
       [
@@ -104,18 +118,22 @@ ${existingTexts.length ? existingTexts.map((t) => `- ${t}`).join('\n') : '（无
         ['human', userPrompt],
       ],
       buildTraceConfig('graph-memory-writer', { traceId, userId, threadId }) as any
-    );
+    ) as unknown as AIMessage;
 
+    // 结构化提取：优先取工具调用参数，模型没走工具时退回文本 JSON，两条路都用同一个 schema 校验
+    const fromTool = MemorySchema.safeParse(response.tool_calls?.[0]?.args);
     const responseText = typeof response.content === 'string'
       ? response.content
       : JSON.stringify(response.content);
 
-    console.log(`[memoryWriter] 用户 ${userId} 模型输出：${responseText}`);
-    const memories = parseMemoryArray(responseText);
-    console.log(`[memoryWriter] 用户 ${userId} 解析记忆：${memories.join(', ')}`);
+    console.log(`[memoryWriter] 用户 ${userId} 模型输出：${responseText || JSON.stringify(response.tool_calls)}`);
+    const memories = fromTool.success
+      ? fromTool.data.memories
+      : parseMemoriesFromText(responseText);
+    console.log(`[memoryWriter] 用户 ${userId} 提取记忆(${fromTool.success ? 'tool_call' : 'text'}): ${memories.join(', ')}`);
 
-    const nextTexts = memories.map((t) => t.trim()).filter(Boolean);
-    const nextKeys = new Set(nextTexts.map(memoryKey));
+    const nextTexts = memories.map((t) => t.trim()).filter(Boolean).slice(0, MAX_MEMORIES);
+    const nextKeys = new Set(nextTexts.map((t) => memoryKey(t)));
 
     // 写入新增/更新的记忆
     for (const text of nextTexts) {
