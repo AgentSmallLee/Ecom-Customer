@@ -27,7 +27,7 @@ import { FailoverChatModel } from '../llm/failover-chat-model.js';
 // ────────────────────────────────────────────
 
 // 单条评估用例（输入）
-interface EvalCase {
+export interface EvalCase {
   question: string;          // 用户问题
   answer: string;            // RAG 系统生成的回答
   contexts: string[];        // 检索到的上下文片段
@@ -36,7 +36,7 @@ interface EvalCase {
 }
 
 // 单条评估结果（输出）
-interface EvalResult {
+export interface EvalResult {
   faithfulness: number;      // 忠实度 0-1，回答是否都有上下文依据
   answerRelevance: number;   // 相关性 0-1，回答是否针对问题
   completeness: number;      // 完整性 0-1，答案要点命中了多少
@@ -44,7 +44,7 @@ interface EvalResult {
 }
 
 // 批量评估报告
-interface EvalReport {
+export interface EvalReport {
   totalCases: number;                           // 总用例数
   avgFaithfulness: number;                      // 平均忠实度
   avgAnswerRelevance: number;                   // 平均相关性

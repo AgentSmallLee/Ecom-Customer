@@ -12,6 +12,7 @@
     "eval-recall": "tsx src/evaluation/eval-recall.ts",
     "eval-precision": "tsx src/evaluation/eval-precision.ts",
     "eval-generation": "tsx src/evaluation/eval-generation.ts",
+    "eval-all": "tsx src/evaluation/eval-all.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

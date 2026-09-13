@@ -18,12 +18,11 @@
 
 import { readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { ragChainWithSources } from '../chains/rag-chain.ts';
-import { RagEvaluatorService } from './rag-evaluator.service.ts';
+import { fileURLToPath, pathToFileURL } from 'url';
+import { ragChainWithSources, closeVectorStore } from '../chains/rag-chain.ts';
+import { RagEvaluatorService, type EvalReport } from './rag-evaluator.service.ts';
 import { createModel } from '../models/model-factory.ts';
 import { buildTraceConfig } from '../llm/trace-context.ts';
-import { pool } from '../db/postgres.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const EVAL_FILE = join(__dirname, './eval-set.json');
@@ -31,10 +30,29 @@ const EVAL_FILE = join(__dirname, './eval-set.json');
 const RESULT_FILE = join(__dirname, './generation-result.json');
 
 // 评测集条目类型
-interface EvalItem {
+export interface EvalItem {
   question: string;
   category: 'product' | 'policy' | 'none';
   answerKeywords: string[];
+}
+
+/** 单条用例的生成与打分明细（落盘用） */
+export interface GenerationDetail {
+  question: string;
+  category: string;
+  answer: string;
+  scores: { faithfulness: number; answerRelevance: number; completeness: number; avgScore: number };
+}
+
+/** 生成质量评估结果（eval-all 汇总与回归对比用） */
+export interface GenerationSummary {
+  totalCases: number;
+  overallScore: number;
+  passRate: number;
+  avgFaithfulness: number;
+  avgAnswerRelevance: number;
+  avgCompleteness: number;
+  byCategory: Record<string, { count: number; avgScore: number; avgFaithfulness: number; avgCompleteness: number }>;
 }
 
 // ────────────────────────────────────────────
@@ -58,31 +76,11 @@ function parseArgs() {
   return { limit, category };
 }
 
-// ────────────────────────────────────────────
-// 主函数
-// ────────────────────────────────────────────
-async function main() {
-  const { limit, category } = parseArgs();
-
-  // 加载评测集
-  let evalSet: EvalItem[] = JSON.parse(readFileSync(EVAL_FILE, 'utf-8'));
-
-  // 按分类过滤
-  if (category) {
-    evalSet = evalSet.filter(item => item.category === category);
-  }
-
-  // 按数量限制
-  if (limit > 0 && limit < evalSet.length) {
-    evalSet = evalSet.slice(0, limit);
-  }
-
-  console.log(`\n📚 RAG 生成质量评估`);
-  console.log(`  评测集：${evalSet.length} 个问题`);
-  if (category) console.log(`  分类过滤：${category}`);
-  console.log(`  评估指标：忠实度 / 相关性 / 完整性`);
-  console.log(`  注意：每道题调 3 次 LLM 打分，请耐心等待\n`);
-
+/**
+ * 跑一遍生成质量评估：调 RAG 生成回答 → LLM 评委三维度打分
+ * 打印进度，返回报告与逐条明细（不做落盘，落盘交给调用方）
+ */
+export async function runGenerationEval(evalSet: EvalItem[]): Promise<{ report: EvalReport; summary: GenerationSummary; details: GenerationDetail[] }> {
   // 初始化评估服务
   const llm = createModel({ temperature: 0 });
   const evaluator = new RagEvaluatorService(llm);
@@ -121,7 +119,54 @@ async function main() {
 
   const { results, report } = await evaluator.evaluate(evalCases);
 
-  // ── 第三步：输出报告 ──
+  // 汇总摘要 + 逐条明细，返回给调用方（main 负责落盘，eval-all 负责回归对比）
+  const summary: GenerationSummary = {
+    totalCases: report.totalCases,
+    overallScore: report.overallScore,
+    passRate: report.passRate,
+    avgFaithfulness: report.avgFaithfulness,
+    avgAnswerRelevance: report.avgAnswerRelevance,
+    avgCompleteness: report.avgCompleteness,
+    byCategory: report.byCategory,
+  };
+  const details: GenerationDetail[] = evalSet.map((item, i) => ({
+    question: item.question,
+    category: item.category,
+    answer: generated[i].answer,
+    scores: results[i],
+  }));
+
+  return { report, summary, details };
+}
+
+// ────────────────────────────────────────────
+// 主函数
+// ────────────────────────────────────────────
+async function main() {
+  const { limit, category } = parseArgs();
+
+  // 加载评测集
+  let evalSet: EvalItem[] = JSON.parse(readFileSync(EVAL_FILE, 'utf-8'));
+
+  // 按分类过滤
+  if (category) {
+    evalSet = evalSet.filter(item => item.category === category);
+  }
+
+  // 按数量限制
+  if (limit > 0 && limit < evalSet.length) {
+    evalSet = evalSet.slice(0, limit);
+  }
+
+  console.log(`\n📚 RAG 生成质量评估`);
+  console.log(`  评测集：${evalSet.length} 个问题`);
+  if (category) console.log(`  分类过滤：${category}`);
+  console.log(`  评估指标：忠实度 / 相关性 / 完整性`);
+  console.log(`  注意：每道题调 3 次 LLM 打分，请耐心等待\n`);
+
+  const { report, details } = await runGenerationEval(evalSet);
+
+  // ── 输出报告 ──
   console.log('\n' + '='.repeat(60));
   console.log('  📊 生成质量评估报告');
   console.log('='.repeat(60));
@@ -165,28 +210,32 @@ async function main() {
   }
 
   // ── 保存结果到文件 ──
+  // 除了总分，把各维度均值与分类统计也落盘，方便后续对比不同版本的效果
   const outputData = {
     evalTime: new Date().toISOString(),
     totalCases: report.totalCases,
     overallScore: report.overallScore,
     passRate: report.passRate,
-    details: evalSet.map((item, i) => ({
-      question: item.question,
-      category: item.category,
-      answer: generated[i].answer,
-      scores: results[i],
-    })),
+    avgFaithfulness: report.avgFaithfulness,
+    avgAnswerRelevance: report.avgAnswerRelevance,
+    avgCompleteness: report.avgCompleteness,
+    byCategory: report.byCategory,
+    details,
   };
 
   writeFileSync(RESULT_FILE, JSON.stringify(outputData, null, 2), 'utf-8');
   console.log(`\n  💾 详细结果已保存到：${RESULT_FILE}`);
 
-  // 收尾
-  await pool.end();
+  // 收尾：释放向量库占用的连接并关闭连接池
+  await closeVectorStore();
   console.log('\n✅ 评估完成\n');
 }
 
-main().catch(err => {
-  console.error('❌ 评估失败：', err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+// 只有直接运行本文件时才跑 CLI；被 eval-all.ts 导入时只复用 runGenerationEval
+const isDirectRun = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isDirectRun) {
+  main().catch(err => {
+    console.error('❌ 评估失败：', err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}

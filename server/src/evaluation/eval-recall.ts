@@ -1,4 +1,4 @@
-// server/src/scripts/eval-recall.ts
+// server/src/evaluation/eval-recall.ts
 // RAG 召回率（Recall@K）评估脚本
 //
 // 用法（推荐用 pnpm 脚本）：
@@ -21,22 +21,28 @@
 
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { vectorSearch, keywordSearch, hybridSearch } from '../chains/rag-chain.ts';
-import { pool } from '../db/postgres.ts';
+import { fileURLToPath, pathToFileURL } from 'url';
+import { vectorSearch, keywordSearch, hybridSearch, closeVectorStore } from '../chains/rag-chain.ts';
 import { createModel } from '../models/model-factory.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const EVAL_FILE = join(__dirname, './eval-set.json');
 
 // 支持的检索模式
-type Mode = 'vector' | 'keyword' | 'hybrid';
+export type Mode = 'vector' | 'keyword' | 'hybrid';
 
 // 评测集每一项的类型定义
-interface EvalItem {
+export interface EvalItem {
   question: string;          // 用户问题
   category: 'product' | 'policy' | 'none'; // 问题分类，用于分类统计
   answerKeywords: string[];   // 答案要点（生成质量评估用，召回评估不依赖）
+}
+
+// 单个模式的召回结果（供 eval-all 汇总与回归对比使用）
+export interface RecallSummary {
+  mode: Mode;
+  recallByK: Record<number, number>;                      // K -> 总体召回率
+  categoryRecall: Record<string, Record<number, number>>; // 分类 -> K -> 召回率
 }
 
 // ────────────────────────────────────────────
@@ -165,7 +171,7 @@ ${contextText}
 //   - 一次拿最大 K 再切片：49 × 1 = 49 次检索调用
 //   直接省了 75% 的调用量和时间，结果完全一样。
 //   这是一个很常见的小优化，准确率脚本里也是同样的做法。
-async function evaluateMode(evalSet: EvalItem[], mode: Mode, ks: number[]) {
+export async function evaluateMode(evalSet: EvalItem[], mode: Mode, ks: number[]): Promise<RecallSummary> {
   console.log(`\n${'='.repeat(60)}`);
   console.log(`  模式：${mode.toUpperCase()}`);
   console.log(`${'='.repeat(60)}`);
@@ -213,28 +219,35 @@ async function evaluateMode(evalSet: EvalItem[], mode: Mode, ks: number[]) {
   }
 
   // 输出总体召回率
+  const recallByK: Record<number, number> = {};
   console.log(`\n  📊 总体召回率：`);
   for (const k of ks) {
     const hits = hitsByK[k].reduce((a, b) => a + b, 0); // 命中数量
     const total = hitsByK[k].length;                    // 总问题数
     const recall = hits / total;                        // 召回率 = 命中数 ÷ 总数
+    recallByK[k] = recall;
     console.log(`    Recall@${k.toString().padEnd(2)} = ${recall.toFixed(4)}  (${hits}/${total})`);
   }
 
   // 输出分类召回率，看不同类型的问题召回率怎么样，方便定位短板
+  const categoryRecall: Record<string, Record<number, number>> = {};
   console.log(`\n  📂 分类召回率：`);
   for (const cat of ['product', 'policy', 'none'] as const) {
     const catName = cat === 'product' ? '商品查询' : cat === 'policy' ? '政策查询' : '无答案';
     const parts: string[] = [];
+    categoryRecall[cat] = {};
     for (const k of ks) {
       const arr = catHits[cat][k];
       if (arr.length === 0) continue;
       const hits = arr.reduce((a, b) => a + b, 0);
       const recall = hits / arr.length;
+      categoryRecall[cat][k] = recall;
       parts.push(`Recall@${k}=${recall.toFixed(2)}`);
     }
     console.log(`    ${catName.padEnd(6)} (${catHits[cat][ks[0]].length}题)：${parts.join('  ')}`);
   }
+
+  return { mode, recallByK, categoryRecall };
 }
 
 // ────────────────────────────────────────────
@@ -253,30 +266,36 @@ async function main() {
   if (mode === 'all') {
     // 三种模式都跑，方便对比
     const modes: Mode[] = ['vector', 'keyword', 'hybrid'];
+    const summaries: RecallSummary[] = [];
     for (const m of modes) {
-      await evaluateMode(evalSet, m, ks);
+      summaries.push(await evaluateMode(evalSet, m, ks));
     }
 
-    // 打印对比总结的表头（详细数据看上面各模式的输出）
+    // 打印三种模式的对比总表
     console.log(`\n${'='.repeat(60)}`);
     console.log(`  🎯 三种模式对比总结（召回率）`);
     console.log(`${'='.repeat(60)}`);
     console.log(`  ${'模式'.padEnd(10)}${ks.map(k => `Recall@${k}`.padEnd(12)).join('')}`);
     console.log(`  ${'-'.repeat(58)}`);
-    console.log(`  （详情见上方各模式输出）`);
+    for (const s of summaries) {
+      console.log(`  ${s.mode.padEnd(10)}${ks.map(k => (s.recallByK[k]?.toFixed(3) ?? '-').padEnd(12)).join('')}`);
+    }
     console.log('');
   } else {
     // 只跑单个模式
     await evaluateMode(evalSet, mode, ks);
   }
 
-  // 关闭数据库连接池，不然 Node 进程不会退出
-  await pool.end();
+  // 释放向量库占用的连接并关闭连接池，不然 Node 进程不会退出
+  await closeVectorStore();
   console.log('✅ 评估完成\n');
 }
 
-// 启动
-main().catch(err => {
-  console.error('❌ 评估失败：', err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+// 只有直接运行本文件时才跑 CLI；被 eval-all.ts 导入时只复用上面的评估函数
+const isDirectRun = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isDirectRun) {
+  main().catch(err => {
+    console.error('❌ 评估失败：', err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}
