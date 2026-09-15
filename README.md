@@ -103,7 +103,44 @@ pnpm run dev
 - **前端**: Vue 3、Vue Router、Vite、TypeScript
 - **后端**: NestJS、LangChain、LangGraph、PostgreSQL + pgvector + pg_trgm
 - **AI**: OpenAI 兼容接口大模型（DeepSeek 等）
+- **可观测性**: LangSmith 链路追踪 + 自建审计日志（`llm_audit_logs`）
 - **包管理器**: pnpm
+
+## LangSmith 链路追踪
+
+系统接入 [LangSmith](https://www.langchain.com/langsmith) 做 LLM 调用链路的可视化追踪，配合自建的审计日志（`llm_audit_logs` 表）形成完整的可观测性体系。
+
+### 启用方式
+
+在 `server/.env` 配置三个环境变量即可（LangChain core 检测到 `LANGSMITH_TRACING=true` 会自动全局启用追踪）：
+
+```bash
+LANGSMITH_TRACING=true        # 是否启用 LangSmith 监控
+LANGSMITH_API_KEY=...         # LangSmith 的 API Key
+LANGSMITH_PROJECT=...         # 项目名称，WebUI 按此筛选运行记录
+```
+
+### 工作原理
+
+- LangSmith 以**回调处理器**的形式注入 LangChain 回调系统：每次模型/链/图执行时，run 树（prompt、输出、token、耗时）异步上报
+- 同一请求内通过 `parentRunId` 把嵌套调用串成一棵 **trace 树**（意图路由 → 各节点 → 模型调用）
+- 追踪是**异步**的，不阻塞用户请求主流程
+
+### 与自建审计日志对齐
+
+项目用统一的 [buildTraceConfig](server/src/llm/trace-context.ts) 生成追踪配置，一份配置两个用途：
+
+| 字段 | 读取方 | 用途 |
+|---|---|---|
+| 顶层 `source/traceId/userId/threadId` | 自定义模型 `FailoverChatModel.extractMetadata` | 写审计日志（`llm_audit_logs`） |
+| `metadata`（同字段） | LangSmith 回调系统 | WebUI 按用户/会话筛选 trace |
+| `runName = source` | LangSmith | run 名称 = 审计的 `source`，两边可互查 |
+
+每次用户请求生成唯一 `traceId`，全链路节点共享，因此审计日志与 LangSmith trace 可通过同一 `traceId` 关联排查。
+
+### 效果图
+
+![LangSmith 监控](图片/LangSmith监控.png)
 
 ## 前端页面
 
