@@ -86,6 +86,9 @@ export class AgentController {
             break;
 
           case 'tool_end': {
+            // data: {"type":"step","tool":"getOrderInfo",
+            // "toolInput":{"orderId":"ORD-001"},
+            // "observation":"{\"error\":\"订单 ORD-001 不存在\"}"}
             const pending = pendingTools.get(event.name);
             send('step', {
               tool:        event.name,

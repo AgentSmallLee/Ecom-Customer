@@ -107,7 +107,7 @@ export class AgentService {
       // 用字符串暂存 args，流式场景下是逐段字符串拼起来的
       const toolCallBuilders: { name: string; args: string; id: string }[] = [];
 
-      for await (const chunk of stream) {
+      for await (const chunk of stream) {     
         // 逐块推送 token 到 custom 流
         const chunkContent = typeof chunk.content === 'string' ? chunk.content : '';
         if (chunkContent) {
@@ -147,7 +147,16 @@ export class AgentService {
           writer({ type: 'tool_start', name: tc.name, input: tc.args });
         }
       }
-
+      // toolCalls 是ToolCall[]
+      // [
+  //{
+  //  name: 'getOrderInfo',
+  //  args: { orderId: 'ORD-001' },
+  //  id: 'call_00_rMEb3oWOeiDSIJP83Dnp2905',
+  //  type: 'tool_call'
+  // /}
+  // ]
+  // 返回 AI 消息，包含 tool_calls
       return { messages: [new AIMessage({ content, tool_calls: toolCalls })] };
     };
 
@@ -219,12 +228,16 @@ export class AgentService {
     const config = { configurable: { thread_id: withNamespace(NAMESPACE, threadId, userId), user_id: userId, traceId } };
 
     const stream = await this.graph.stream(
+      // 给图的初始状态
       { messages: [new HumanMessage(message)] },
+      // RunnableConfig 
       { streamMode: 'custom', ...config },
     );
 
     // 透传 custom 流中的事件
     for await (const event of stream as unknown as AsyncIterable<unknown>) {
+      // streamMode是custom模式，event就是节点writer推的自定义事件
+      console.log(event);
       if (event && typeof event === 'object') {
         yield event as AgentStreamEvent;
       }

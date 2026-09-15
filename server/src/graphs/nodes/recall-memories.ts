@@ -25,6 +25,7 @@ export const recallMemoriesNode = async (
   }
 
   try {
+    // 从长期记忆中召回用户偏好，最多10条
     const items = await store.search(['memories', userId], { limit: 10 });
     console.log('[recallMemories]', items); // 打印召回的长期记忆
     // [

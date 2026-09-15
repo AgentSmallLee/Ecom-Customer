@@ -20,13 +20,13 @@ export const shouldSummarize = (state: GraphStateType): 'summarize' | 'end' =>
 const prompt = ChatPromptTemplate.fromMessages([
   [
     'system',
-    `你是对话摘要助手。请把"已有摘要"和"新增对话"合并为一份更新的摘要。
+    `你是对话摘要助手。请把"已有摘要"和"本次待压缩对话"合并为一份更新的摘要。
 要求：
 - 保留用户的个人信息、偏好、订单相关诉求等关键事实
 - 用第三人称简述，不要遗漏已有摘要中的重要信息
 - 直接输出摘要正文，不要任何前缀或解释`,
   ],
-  ['human', `已有摘要：\n{summary}\n\n新增对话：\n{conversation}`],
+  ['human', `已有摘要：\n{summary}\n\n本次待压缩对话：\n{conversationToCompress}`],
 ]);
 
 const chain = prompt.pipe(createModel({ temperature: 0 })).pipe(new StringOutputParser());
@@ -38,18 +38,20 @@ export const summarizeNode = async (state: GraphStateType, config: LangGraphRunn
   const userId   = config?.configurable?.user_id   as string | undefined;
   const threadId = config?.configurable?.thread_id as string | undefined;
 
+  // 从头到倒数第4条的旧消息
   const oldMessages = messages.slice(0, -KEEP_RECENT);
   if (oldMessages.length === 0) return {};
 
-  const conversation = oldMessages
+  const conversationToCompress = oldMessages
     .map((m) => `${m._getType?.() === 'human' ? '用户' : '客服'}: ${m.content}`)
     .join('\n');
 
   try {
+    // 把已有的摘要和
     const newSummary = await chain.invoke(
       {
         summary: summary || '（无）',
-        conversation,
+        conversationToCompress: conversationToCompress,
       },
       buildTraceConfig('graph-summarize', { traceId, userId, threadId }) as any
     );

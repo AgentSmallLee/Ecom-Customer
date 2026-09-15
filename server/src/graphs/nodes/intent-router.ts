@@ -27,7 +27,7 @@ const intentPrompt = ChatPromptTemplate.fromMessages([
 const chain = intentPrompt.pipe(createModel({ temperature: 0 })).pipe(new StringOutputParser());
 // 有效的意图分类词
 const VALID_INTENTS = ['order', 'knowledge', 'general'];
-// 验证意图分类词是否有效
+// 验证意图分类词是否有效，白名单校验
 const isValidIntent = (s: string): s is Intent =>
   (VALID_INTENTS as string[]).includes(s);
 
@@ -39,8 +39,9 @@ export const intentRouterNode = async (state: GraphStateType, config: LangGraphR
   const userId   = config?.configurable?.user_id   as string | undefined;
   const threadId = config?.configurable?.thread_id as string | undefined;
 
-  // 附带最近几轮对话，让"那它发货了吗"这类指代式追问也能正确分类
+  // 附带最近几轮对话，让"那它发货了吗"这类指代式追问也能正确分类，最大4轮
   const recentDialogue = formatMessagesAsText((messages || []).slice(0, -1), 4);
+  // 把输入和最近的几轮对话合并，供模型理解
   const input = recentDialogue
     ? `${userInput}\n\n（最近对话，供理解指代参考）\n${recentDialogue}`
     : userInput;
@@ -49,13 +50,14 @@ export const intentRouterNode = async (state: GraphStateType, config: LangGraphR
   // （metadata 供 LangSmith 按用户/会话筛选；模型侧仍读顶层字段，两者都在同一个 config 里）
   const raw    = await chain.invoke(
     { userInput: input },
+    // invoke的第二个参数是RunnableConfig
     buildTraceConfig('graph-intent-router', { traceId, userId, threadId }) as any
   );
   const intent = raw.trim().toLowerCase();
   const final  = isValidIntent(intent) ? intent : 'general';
   console.log(`[intentRouter] "${userInput}" → ${final}`);
-  // 更新状态中的意图分类词
-  state.intent = final as Intent;
+  // 返回值即状态更新：LangGraph 会把 { intent } 按 intent channel 的 reducer 合并进 state，
+  // 条件边 routeByIntent 在节点返回后才执行，读取到的就是更新后的 state.intent
   return { intent: final };
 };
 
@@ -67,5 +69,6 @@ const ROUTE_MAP: Record<Intent, RouteTarget> = {
   general:  'generalChat',
 };
 
+// 路由函数，根据意图分类词选择目标节点名称，返回的是节点名称
 export const routeByIntent = (state: GraphStateType): RouteTarget =>
   ROUTE_MAP[state.intent] || 'generalChat';

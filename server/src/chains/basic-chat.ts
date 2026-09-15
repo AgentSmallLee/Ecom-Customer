@@ -10,11 +10,7 @@ import { StringOutputParser } from '@langchain/core/output_parsers';
 import { createModel } from '../models/model-factory.ts';
 import { customerServicePrompt } from '../prompts/customer-service.ts';
 
-// ─── 红松心选客服 Chain（非流式）───────────────────────────────────
-const model = createModel({ temperature: 0.5 });
 const parser = new StringOutputParser();
-
-export const customerServiceChain = customerServicePrompt.pipe(model).pipe(parser);
 
 // ─── 红松心选客服 Chain（流式）────────────────────────────────────
 const streamingModel = createModel({ temperature: 0.5, streaming: true });

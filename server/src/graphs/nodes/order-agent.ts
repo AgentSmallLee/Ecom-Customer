@@ -11,6 +11,9 @@ import { createOrderTools } from '../../tools/order-tools.ts';
 import { buildMemoryContext, formatMessagesAsText } from '../memory-context.ts';
 import type { GraphStateType, ToolStep } from '../state.ts';
 
+// 为什么这里 temperature=0？
+// 因为工具调用时，模型会根据工具参数生成固定输出，而不是随机输出。
+// 这样可以确保每次调用工具时，模型的输出都是确定的，不会因为随机性而改变。
 const model = createModel({ temperature: 0 });
 
 /** 消息内容统一转为字符串（content 可能为多模态数组） */

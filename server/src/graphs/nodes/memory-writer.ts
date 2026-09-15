@@ -18,10 +18,11 @@ const MemorySchema = z.object({
 });
 
 /** 用 function calling 做结构化提取：schema 交给模型侧约束，避免事后解析自由文本 */
+//
 const saveMemoriesTool = tool(async () => 'ok', {
-  name: 'save_memories',
+  name: 'save_memories', // 工具名称
   description: '保存更新后的用户长期记忆列表',
-  schema:   MemorySchema,
+  schema:   MemorySchema, // 定义参数格式
 });
 
 // 用 temperature=0 的模型保证输出稳定，并绑定提取工具
@@ -122,10 +123,11 @@ ${existingTexts.length ? existingTexts.map((t) => `- ${t}`).join('\n') : '（无
 
     // 结构化提取：优先取工具调用参数，模型没走工具时退回文本 JSON，两条路都用同一个 schema 校验
     const fromTool = MemorySchema.safeParse(response.tool_calls?.[0]?.args);
+    // 校验结果 { success : true , data :   { memories : [ '用户喜欢红色' , ...] } }
     const responseText = typeof response.content === 'string'
       ? response.content
       : JSON.stringify(response.content);
-
+     // [{"name":"save_memories","args":{"memories":["用户喜欢红色","用户喜欢吃苹果"]},"type":"tool_call","id":"call_00_2oHvCpjfcHw7wVWmaKnl6296"}] 
     console.log(`[memoryWriter] 用户 ${userId} 模型输出：${responseText || JSON.stringify(response.tool_calls)}`);
     const memories = fromTool.success
       ? fromTool.data.memories

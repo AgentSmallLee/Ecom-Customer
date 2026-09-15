@@ -36,10 +36,12 @@ export interface TraceConfig {
 export function buildTraceConfig(source: string, ids: TraceIds = {}): TraceConfig {
   const { traceId, userId, threadId } = ids;
   return {
+    // 自定义的顶层键，LangChain 不认识，不报错，用于审计日志写入
     source,
     traceId,
     userId,
     threadId,
+    // runName和metadata是LangChain官方标准字段，BaseCallbackConfig
     runName: source,
     metadata: { source, traceId, userId, threadId },
   };

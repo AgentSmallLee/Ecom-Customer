@@ -1,5 +1,5 @@
 // server/src/evaluation/eval-recall.ts
-// RAG 召回率（Recall@K）评估脚本
+// RAG 召回率（声明级 Recall@K）评估脚本
 //
 // 用法（推荐用 pnpm 脚本）：
 //   pnpm eval-recall -- --mode all         # 三种模式一起对比（推荐）
@@ -10,14 +10,15 @@
 //   pnpm eval-recall -- --k 5               # 只评测指定 K 值
 //   pnpm eval-recall -- --ks 1,3,5,10       # 评测多个 K 值
 //
-// 召回率（Recall@K）是什么？
-//   top-K 条结果中，有没有包含正确答案？有多少正确答案被捞回来了？
-//   通俗说：该回来的回来了多少？怕漏掉。
-//   和准确率的区别：准确率怕掺假（回来的有多少是对的），召回率怕漏掉（该回来的回来了多少）。
+// 声明级召回率（对齐 RAGAS Context Recall）是什么？
+//   把每道题的 answerKeywords（答案要点/claims）当作"该回来的信息"，
+//   逐条判断 top-K 检索结果是否覆盖了这个要点，得分 = 被覆盖的要点数 ÷ 该题要点总数。
+//   通俗说：标准答案有 10 个要点，检索覆盖 5 个，召回率就是 50%。
+//   相比"top-K 整体能否回答"的 Hit@K，声明级粒度更细，能定位具体漏了哪个要点。
 //
 // 命中判断标准：
-//   用 LLM 语义判断 top-K 结果能否回答这个问题（纯问题 + 上下文，不依赖答案要点）
-//   无答案问题：一条都没召回才算命中（说明检索系统没乱召回）
+//   用 LLM 语义判断 top-K 结果是否覆盖某个要点（纯问题 + 该要点 + 上下文）
+//   无答案问题（category=none）：一条都没召回才算命中（说明检索系统没乱召回）
 
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -108,47 +109,42 @@ async function searchByMode(query: string, mode: Mode, k: number) {
 const llm = createModel({ temperature: 0 });
 
 // ────────────────────────────────────────────
-// 判断是否命中（召回率判断标准 — LLM 语义评估版）
+// 判断是否命中（声明级判断标准 — LLM 语义评估版）
 // ────────────────────────────────────────────
-// 用 LLM 判断检索到的 top-K 个 chunk，从语义上看能不能回答这个问题。
+// 用 LLM 判断检索到的 top-K 个 chunk，是否覆盖了回答该问题所需的某一个要点。
 //
-// 为什么不用关键词匹配了？
-//   关键词匹配太粗：
-//     · 假阳性：chunk 里有关键词但说的是另一件事
-//     · 假阴性：chunk 说的是对的但措辞不一样，关键词匹配不上
-//   LLM 做语义判断更准确，更接近真实的召回效果。
+// 为什么用"要点"而不是"整段上下文能不能回答"？
+//   整体判断粒度太粗：上下文缺了某一个关键事实也算"能回答"，无法定位漏了什么。
+//   逐条判断每个 answerKeyword 后，Recall = 被覆盖的要点数 / 总要点数（对齐 RAGAS Context Recall）。
 //
 // 无答案问题的特殊处理：
 //   一条结果都没召回才算命中——说明检索系统知道这道题它不会，没乱答。
 //   召回了任何东西 = 没命中 = 乱召回了。
 async function isHitLLM(
   question: string,
+  keyword: string,
   docs: { pageContent: string }[],
-  category: string,
 ): Promise<boolean> {
-  // 无答案问题：没有任何匹配就是命中（说明检索没有乱召回）
-  if (category === 'none') {
-    return docs.length === 0;
-  }
-  // 有答案问题但一条没检索到 → 肯定没命中
-  if (docs.length === 0) {
-    return false;
-  }
+  // 没有任何上下文 → 该要点不可能被覆盖
+  if (docs.length === 0) return false;
 
   // 把检索到的上下文拼起来
   const contextText = docs.map((d, i) => `[${i + 1}] ${d.pageContent}`).join('\n---\n');
 
-  const prompt = `你是一个检索质量评估员。请判断以下检索到的上下文片段，从语义上是否包含了回答这个问题所需的关键信息。
+  const prompt = `你是一个检索质量评估员。请判断以下检索到的上下文片段，是否包含回答这个问题所需的这个信息要点。
 
 【问题】
 ${question}
+
+【需要判断的信息要点】
+${keyword}
 
 【检索到的上下文】
 ${contextText}
 
 判断标准：
-- 只要上下文中包含了回答问题所需的主要信息（语义一致即可，不要求措辞完全一样），就算命中
-- 如果上下文完全不相关，或者缺少回答问题的关键信息，就算没命中
+- 只要上下文中包含了这个信息要点（语义一致即可，不要求措辞完全一样），就算命中，输出 yes
+- 如果上下文完全不包含这个要点，输出 no
 
 请只输出 yes 或 no，不要输出其他任何文字。`;
 
@@ -162,7 +158,7 @@ ${contextText}
 // 流程：
 //   1. 遍历评测集中的每个问题
 //   2. 对每个问题，一次检索拿 maxK 条结果（所有 K 值共用，省 API 调用）
-//   3. 对每个 K 值，分别判断是否命中
+//   3. 对每个 K 值，逐条判断 answerKeywords 各要点是否被覆盖
 //   4. 最后统计总体召回率和分类召回率
 //
 // 为什么一次拿 maxK 而不是每个 K 各查一次？
@@ -171,27 +167,35 @@ ${contextText}
 //   - 一次拿最大 K 再切片：49 × 1 = 49 次检索调用
 //   直接省了 75% 的调用量和时间，结果完全一样。
 //   这是一个很常见的小优化，准确率脚本里也是同样的做法。
+//
+// 为什么"一次检索"还能逐 K 判断要点？
+//   top-K 是 maxK 结果的前缀切片，每个 K 各自逐条判断要点是否被覆盖，
+//   所以每个 K 值都会对每个要点单独调用一次 LLM 判断。
 export async function evaluateMode(evalSet: EvalItem[], mode: Mode, ks: number[]): Promise<RecallSummary> {
   console.log(`\n${'='.repeat(60)}`);
   console.log(`  模式：${mode.toUpperCase()}`);
   console.log(`${'='.repeat(60)}`);
 
-  // 用对象存每个 K 值的命中记录（1=命中，0=未命中）
-  // 比如 hitsByK[4] = [1, 1, 0, 1, ...]
-  const hitsByK: Record<number, number[]> = {};
-  ks.forEach(k => (hitsByK[k] = []));
+  // 每个 K 值存两套累计：被覆盖的要点数（分子）、总要点数（分母）
+  // 比如 coveredByK[4] = [1, 2, 0, 1, ...]  totalByK[4] = [2, 3, 2, 2, ...]
+  const coveredByK: Record<number, number[]> = {};
+  const totalByK:   Record<number, number[]> = {};
+  ks.forEach(k => {
+    coveredByK[k] = [];
+    totalByK[k]   = [];
+  });
 
   // 按分类存储，方便看不同类型问题的表现差异
   // 比如：政策查询召回率特别低 → 说明政策类文档的检索需要优化
-  const catHits: Record<string, Record<number, number[]>> = {
-    product: {}, // 商品查询
-    policy: {},  // 政策查询
-    none: {},    // 无答案问题
-  };
+  const catCovered: Record<string, Record<number, number[]>> = { product: {}, policy: {}, none: {} };
+  const catTotal:   Record<string, Record<number, number[]>> = { product: {}, policy: {}, none: {} };
   ks.forEach(k => {
-    catHits.product[k] = [];
-    catHits.policy[k] = [];
-    catHits.none[k] = [];
+    catCovered.product[k] = [];
+    catCovered.policy[k]  = [];
+    catCovered.none[k]    = [];
+    catTotal.product[k]   = [];
+    catTotal.policy[k]    = [];
+    catTotal.none[k]      = [];
   });
 
   // 最大的 K 值，一次检索拿这么多，所有小 K 值都从这里切片
@@ -200,33 +204,52 @@ export async function evaluateMode(evalSet: EvalItem[], mode: Mode, ks: number[]
   for (let i = 0; i < evalSet.length; i++) {
     const item = evalSet[i];
 
-    // 打印进度，比如 [12/49] 蓝牙耳机多少钱 ... ✓@1 ✓@3 ✗@5
+    // 打印进度，比如 [12/49] 蓝牙耳机多少钱 ... 1/2@1 2/3@3
     process.stdout.write(`  [${i + 1}/${evalSet.length}] ${item.question.slice(0, 20)}... `);
 
     // 只调一次检索，拿 maxK 条结果
     const docs = await searchByMode(item.question, mode, maxK);
 
-    // 对每个 K 值分别用 LLM 判断是否命中
+    // 对每个 K 值分别逐条判断要点是否被覆盖
     let hitStr = '';
     for (const k of ks) {
       const topK = docs.slice(0, k); // 小 K 直接从 maxK 结果里截前 N 条
-      const hit = await isHitLLM(item.question, topK, item.category);
-      hitsByK[k].push(hit ? 1 : 0);
-      catHits[item.category][k].push(hit ? 1 : 0);
-      hitStr += (hit ? '✓' : '✗') + `@${k} `;
+
+      // 无答案问题：一条都没召回才算命中（说明检索没有乱召回）
+      if (item.category === 'none') {
+        const hit = topK.length === 0 ? 1 : 0;
+        coveredByK[k].push(hit);
+        totalByK[k].push(1);
+        catCovered.none[k].push(hit);
+        catTotal.none[k].push(1);
+        hitStr += (hit ? '✓' : '✗') + `@${k} `;
+        continue;
+      }
+
+      // 有答案问题：逐条判断每个要点是否被 top-K 覆盖
+      let covered = 0;
+      for (const kw of item.answerKeywords) {
+        if (await isHitLLM(item.question, kw, topK)) covered++;
+      }
+      const total = item.answerKeywords.length || 1; // 防止空要点数组除零
+      coveredByK[k].push(covered);
+      totalByK[k].push(total);
+      catCovered[item.category][k].push(covered);
+      catTotal[item.category][k].push(total);
+      hitStr += `${covered}/${total}@${k} `;
     }
     console.log(hitStr);
   }
 
-  // 输出总体召回率
+  // 输出总体召回率（声明级：Σ被覆盖要点 / Σ总要点）
   const recallByK: Record<number, number> = {};
-  console.log(`\n  📊 总体召回率：`);
+  console.log(`\n  📊 总体召回率（声明级）：`);
   for (const k of ks) {
-    const hits = hitsByK[k].reduce((a, b) => a + b, 0); // 命中数量
-    const total = hitsByK[k].length;                    // 总问题数
-    const recall = hits / total;                        // 召回率 = 命中数 ÷ 总数
+    const covered = coveredByK[k].reduce((a, b) => a + b, 0); // 被覆盖的要点总数
+    const total   = totalByK[k].reduce((a, b) => a + b, 0);   // 总要点数
+    const recall  = total > 0 ? covered / total : 0;          // 召回率 = 覆盖要点 ÷ 总要点
     recallByK[k] = recall;
-    console.log(`    Recall@${k.toString().padEnd(2)} = ${recall.toFixed(4)}  (${hits}/${total})`);
+    console.log(`    Recall@${k.toString().padEnd(2)} = ${recall.toFixed(4)}  (${covered}/${total} 要点)`);
   }
 
   // 输出分类召回率，看不同类型的问题召回率怎么样，方便定位短板
@@ -237,14 +260,15 @@ export async function evaluateMode(evalSet: EvalItem[], mode: Mode, ks: number[]
     const parts: string[] = [];
     categoryRecall[cat] = {};
     for (const k of ks) {
-      const arr = catHits[cat][k];
-      if (arr.length === 0) continue;
-      const hits = arr.reduce((a, b) => a + b, 0);
-      const recall = hits / arr.length;
+      const cov = catCovered[cat][k];
+      if (cov.length === 0) continue;
+      const covered = cov.reduce((a, b) => a + b, 0);
+      const total   = catTotal[cat][k].reduce((a, b) => a + b, 0);
+      const recall  = total > 0 ? covered / total : 0;
       categoryRecall[cat][k] = recall;
       parts.push(`Recall@${k}=${recall.toFixed(2)}`);
     }
-    console.log(`    ${catName.padEnd(6)} (${catHits[cat][ks[0]].length}题)：${parts.join('  ')}`);
+    console.log(`    ${catName.padEnd(6)} (${catCovered[cat][ks[0]].length}题)：${parts.join('  ')}`);
   }
 
   return { mode, recallByK, categoryRecall };

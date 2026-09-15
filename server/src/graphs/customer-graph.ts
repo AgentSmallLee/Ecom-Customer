@@ -31,7 +31,7 @@ export const buildCustomerGraph = (checkpointer?: BaseCheckpointSaver, store?: B
 
     .addEdge(START, 'recallMemories')
     .addEdge('recallMemories', 'intentRouter')
-
+    // 条件边，根据意图分类器的结果选择目标节点名称
     .addConditionalEdges('intentRouter', routeByIntent, {
       orderAgent:  'orderAgent',
       ragNode:     'ragNode',

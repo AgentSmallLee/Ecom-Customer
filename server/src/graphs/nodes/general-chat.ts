@@ -31,12 +31,13 @@ export const generalChatNode = async (
   state: GraphStateType,
   config: LangGraphRunnableConfig,
 ) => {
+  // 对象解构，userInput 为当前轮输入，messages 为当前对话的所有历史消息
   const { userInput, messages } = state;
 
   // 历史注入：排除最后一条（本轮 userInput 由下方 human 模板承担）
   const chatHistory = (messages || [])
-    .slice(0, -1)
-    .slice(-8)
+    .slice(0, -1) // 去掉
+    .slice(-8)// 取最后8条
     .map((m) => [m._getType?.() === 'human' ? 'human' : 'assistant', m.content] as const)
     .filter(Boolean);
 

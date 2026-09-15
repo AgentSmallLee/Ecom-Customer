@@ -167,6 +167,13 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
   }
 
   // ── 非流式 ──────────────────────────────────────────
+  // BaseChatModel 抽象方法之一（非流式生成，重写后 LangChain 生态照常可用）
+  // 三个参数：
+  //   messages:   输入消息列表（BaseMessage[]，含历史与当前请求的消息）
+  //   options:    调用选项（自定义审计字段 source/traceId/userId/threadId、
+  //               模型参数、工具定义等都在这，由 extractMetadata 提取）
+  //   runManager: 回调管理器（LangChain 传播事件/回调，如 token 事件、日志；
+  //               透传给底层模型，可缺省）
   override async _generate(
     messages:  BaseMessage[],
     options:   this['ParsedCallOptions'],
@@ -282,6 +289,7 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
     options:   this['ParsedCallOptions'],
     runManager?: CallbackManagerForLLMRun,
   ): AsyncGenerator<ChatGenerationChunk> {
+    // 从options中提取traceId, userId, threadId
     const { source, traceId, userId, threadId } = this.extractMetadata(options)
     const t0                  = Date.now()
 
@@ -441,12 +449,20 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
     const callOptions = this.buildCallOptions(options, runManager)
 
     try {
+      // 调底层 ChatOpenAI 的 _generate 发起一次非流式请求：
+      //   messages    → 传入的消息列表
+      //   callOptions → 已剥离审计字段 + 塞入工具定义的调用选项（见 buildCallOptions）
+      //   runManager  → 透传回调管理器
+      // 返回 Promise<ChatResult>（这里不 await，是为了下面和超时 Promise 一起 race）
       const callPromise    = llm._generate(messages, callOptions, runManager)
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('TIMEOUT')), this.timeoutMs)
       )
+      // Promise.race：两个 Promise 谁先 settle 用谁。
+      // 正常情况 callPromise 先完成 → result 是模型结果；
+      // 若超过 timeoutMs 模型还没返回 → timeoutPromise 先 reject('TIMEOUT') → 进入 catch 判为超时，
+      // 实现"单次模型调用限时"，避免模型卡死把整条链路拖死
       const result = await Promise.race([callPromise, timeoutPromise])
-
       // 内容校验：只返回 tool_calls、正文为空是 function calling 的正常返回，不能当失败
       const firstGen     = result.generations[0]
       const content      = firstGen?.text ?? ''
@@ -493,6 +509,7 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
     const callOptions = this.buildCallOptions(options, runManager)
     const stream = llm._streamResponseChunks(messages, callOptions, runManager)
     for await (const chunk of stream) {
+     // 如果llm._streamResponseChunks抛出了异常，会从for await 里抛出来
       yield chunk
     }
   }
@@ -640,6 +657,7 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
       .join('\n')
       .slice(0, 500)
 
+      // 这里是调用方，无await,所以主流程不等DB写入，立即返回-这是不阻塞的核心
     globalAuditLog.write({
       traceId:       params.traceId,
       userId:        params.userId,
@@ -656,6 +674,10 @@ export class FailoverChatModel extends BaseChatModel<BaseChatModelCallOptions> {
       latencyMs:     params.latencyMs,
       errorMessage:  params.errorMessage?.slice(0, 500),
     }).catch(e => {
+      // 虽然 write 内部已经 try/catch 保证不 reject，但调用方再挂一个 catch 
+      // 是为了防御 unhandledRejection——Node 15+ 
+      // 未处理的 rejected Promise 会直接终止进程。宁可冗余，
+      // 也不能让可观测性代码把主进程搞崩
       this.logger.error('审计日志写入失败', e)
     })
   }

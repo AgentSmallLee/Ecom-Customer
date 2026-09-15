@@ -33,9 +33,6 @@ const streamingChain = prompt
   .pipe(createModel({ temperature: 0.5, streaming: true }))
   .pipe(new StringOutputParser());
 
-// 非流式模型（general 意图透传时不需要，但保持备用）
-const chain = prompt.pipe(createModel({ temperature: 0.5 })).pipe(new StringOutputParser());
-
 export const answerSynthesizerNode = async (
   state: GraphStateType,
   config: LangGraphRunnableConfig,
