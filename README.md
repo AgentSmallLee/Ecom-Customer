@@ -2,6 +2,10 @@
 
 基于 Vue 3 + NestJS + LangChain/LangGraph 构建的全栈智能客服系统，支持流式对话、Agent 调用、混合检索 RAG 与完整的质量评估体系。
 
+## 运行效果
+
+![运行效果](图片/运行效果.png)
+
 ## 项目结构
 
 ```
@@ -89,6 +93,10 @@ pnpm run dev
 访问 http://localhost:5175
 
 > 监控台通过 `GET /api/llm/*` 读取数据，请求封装（含开发态 token）在 `monitor/src/utils/request.ts`，与客服前台各自独立。
+
+运行效果：
+
+![LLM 监控台](图片/LLM监控.png)
 
 ## 技术栈
 
