@@ -1,0 +1,122 @@
+
+{messages:[Human]}                      → agent 前
+{messages:[Human, AIMessage(调工具)]}   → agent 后
+{messages:[Human, AIMessage, ToolMessage]} → tools 后
+{messages:[Human, AIMessage, ToolMessage, AIMessage(最终回答)]} → 结束
+
+
+{
+  messages: [
+    HumanMessage {
+      "id": "04801d08-9e69-4497-be4b-e4b73f5cc69d",
+      "content": "查一下订单 ORD-001 的状态",
+      "additional_kwargs": {},
+      "response_metadata": {}
+    }
+  ]
+}
+{
+  messages: [
+    HumanMessage {
+      "id": "04801d08-9e69-4497-be4b-e4b73f5cc69d",
+      "content": "查一下订单 ORD-001 的状态",
+      "additional_kwargs": {},
+      "response_metadata": {}
+    },
+    AIMessage {
+      "id": "2551e72f-a31c-461c-b8c3-4d1a4750a77f",
+      "content": "",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "tool_calls": [
+        {
+          "name": "getOrderInfo",
+          "args": {
+            "orderId": "ORD-001"
+          },
+          "id": "call_00_vODA1RXei3ZBDz9RToLa2714",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": []
+    }
+  ]
+}
+{
+  messages: [
+    HumanMessage {
+      "id": "04801d08-9e69-4497-be4b-e4b73f5cc69d",
+      "content": "查一下订单 ORD-001 的状态",
+      "additional_kwargs": {},
+      "response_metadata": {}
+    },
+    AIMessage {
+      "id": "2551e72f-a31c-461c-b8c3-4d1a4750a77f",
+      "content": "",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "tool_calls": [
+        {
+          "name": "getOrderInfo",
+          "args": {
+            "orderId": "ORD-001"
+          },
+          "id": "call_00_vODA1RXei3ZBDz9RToLa2714",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": []
+    },
+    ToolMessage {
+      "id": "37d076bf-3e8f-4d46-b661-58cd83fa0e48",
+      "content": "{\"error\":\"订单 ORD-001 不存在\"}",
+      "name": "getOrderInfo",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "tool_call_id": "call_00_vODA1RXei3ZBDz9RToLa2714"
+    }
+  ]
+}
+{
+  messages: [
+    HumanMessage {
+      "id": "04801d08-9e69-4497-be4b-e4b73f5cc69d",
+      "content": "查一下订单 ORD-001 的状态",
+      "additional_kwargs": {},
+      "response_metadata": {}
+    },
+    AIMessage {
+      "id": "2551e72f-a31c-461c-b8c3-4d1a4750a77f",
+      "content": "",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "tool_calls": [
+        {
+          "name": "getOrderInfo",
+          "args": {
+            "orderId": "ORD-001"
+          },
+          "id": "call_00_vODA1RXei3ZBDz9RToLa2714",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": []
+    },
+    ToolMessage {
+      "id": "37d076bf-3e8f-4d46-b661-58cd83fa0e48",
+      "content": "{\"error\":\"订单 ORD-001 不存在\"}",
+      "name": "getOrderInfo",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "tool_call_id": "call_00_vODA1RXei3ZBDz9RToLa2714"
+    },
+    AIMessage {
+      "id": "04300264-8242-4bdb-bcdf-491f05ff7e19",
+      "content": "亲，很抱歉，系统里没有查询到订单号 **ORD-001** 的信息哦～\n\n麻烦您核对一下订单号是否输入正确（正确格式为 ORD-xxx）。如果您方便的话，也可以告诉我\"我的订单\"，我帮您查询一下账户下的订单列表，看看是不是记错了单号。\n\n如仍有疑问，也可拨打客服热线 400-888-8888 为您进一步核实。",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "tool_calls": [],
+      "invalid_tool_calls": []
+    }
+  ]
+}

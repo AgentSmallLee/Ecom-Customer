@@ -1,0 +1,107 @@
+{type:'token', content:'正在'} {type:'token', content:'查询'}
+{type:'tool_start', name:'getOrderInfo', input:{orderId:'ORD-001'}}
+{type:'tool_end', name:'getOrderInfo', observation:'{"error":...}'}
+{type:'token', ...} ...
+
+{ type: 'token', content: '好的' }
+{ type: 'token', content: '亲' }
+{ type: 'token', content: '，' }
+{ type: 'token', content: '我' }
+{ type: 'token', content: '马上' }
+{ type: 'token', content: '帮' }
+{ type: 'token', content: '您' }
+{ type: 'token', content: '查询' }
+{ type: 'token', content: '订单' }
+{ type: 'token', content: ' OR' }
+{ type: 'token', content: 'D' }
+{ type: 'token', content: '-' }
+{ type: 'token', content: '001' }
+{ type: 'token', content: ' ' }
+{ type: 'token', content: '的状态' }
+{ type: 'token', content: '~' }
+{
+  type: 'tool_start',
+  name: 'getOrderInfo',
+  input: { orderId: 'ORD-001' }
+}
+{
+  type: 'tool_end',
+  name: 'getOrderInfo',
+  observation: '{"error":"订单 ORD-001 不存在"}'
+}
+{ type: 'token', content: '亲' }
+{ type: 'token', content: '，' }
+{ type: 'token', content: '很' }
+{ type: 'token', content: '抱歉' }
+{ type: 'token', content: '，' }
+{ type: 'token', content: '系统' }
+{ type: 'token', content: '里' }
+{ type: 'token', content: '没有' }
+{ type: 'token', content: '查询' }
+{ type: 'token', content: '到' }
+{ type: 'token', content: '订单' }
+{ type: 'token', content: ' **' }
+{ type: 'token', content: 'ORD' }
+{ type: 'token', content: '-' }
+{ type: 'token', content: '001' }
+{ type: 'token', content: '**' }
+{ type: 'token', content: ' ' }
+{ type: 'token', content: '的记录' }
+{ type: 'token', content: '哦' }
+{ type: 'token', content: '，' }
+{ type: 'token', content: '可能是' }
+{ type: 'token', content: '订单' }
+{ type: 'token', content: '号' }
+{ type: 'token', content: '输入' }
+{ type: 'token', content: '有' }
+{ type: 'token', content: '误' }
+{ type: 'token', content: '~\n\n' }
+{ type: 'token', content: '麻烦' }
+{ type: 'token', content: '您' }
+{ type: 'token', content: '核对' }
+{ type: 'token', content: '一下' }
+{ type: 'token', content: '订单' }
+{ type: 'token', content: '号' }
+{ type: 'token', content: '（' }
+{ type: 'token', content: '正确' }
+{ type: 'token', content: '格式' }
+{ type: 'token', content: '为' }
+{ type: 'token', content: ' OR' }
+{ type: 'token', content: 'D' }
+{ type: 'token', content: '-' }
+{ type: 'token', content: 'xxx' }
+{ type: 'token', content: '，' }
+{ type: 'token', content: '例如' }
+{ type: 'token', content: ' OR' }
+{ type: 'token', content: 'D' }
+{ type: 'token', content: '-' }
+{ type: 'token', content: '001' }
+{ type: 'token', content: '...' }
+{ type: 'token', content: ' ' }
+{ type: 'token', content: '类似' }
+{ type: 'token', content: '这样的' }
+{ type: 'token', content: '编号' }
+{ type: 'token', content: '），' }
+{ type: 'token', content: '或者' }
+{ type: 'token', content: '您' }
+{ type: 'token', content: '也可以' }
+{ type: 'token', content: '告诉我' }
+{ type: 'token', content: '，' }
+{ type: 'token', content: '我' }
+{ type: 'token', content: '帮' }
+{ type: 'token', content: '您' }
+{ type: 'token', content: '查' }
+{ type: 'token', content: '一下' }
+{ type: 'token', content: '您' }
+{ type: 'token', content: '账户' }
+{ type: 'token', content: '下的' }
+{ type: 'token', content: '所有' }
+{ type: 'token', content: '订单' }
+{ type: 'token', content: '列表' }
+{ type: 'token', content: '，' }
+{ type: 'token', content: '您' }
+{ type: 'token', content: '看' }
+{ type: 'token', content: '可以' }
+{ type: 'token', content: '吗' }
+{ type: 'token', content: '？' }
+{ type: 'token', content: '😊' }

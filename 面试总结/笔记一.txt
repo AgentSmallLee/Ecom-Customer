@@ -1,0 +1,121 @@
+1.LangChain和LangGraph的区别
+    1.LangChain是高层开发框架，LangGraph是底层编排框架
+    2.LangChain适合开发结构直接，线性的应用，LangGraph适合复杂，需要条件判断，人工介入的应用
+    针对当前项目:
+        1.客服场景有订单查询 / 知识问答 / 闲聊三条链路，需要「先分类、再分流、最后汇总」的分叉结构。纯 chain 是线性流水线，做不了条件路由
+        2.状态管理 LangGraph 的 `StateGraph` + `Annotation` 提供共享状态和 reducer，节点只返回增量更新（`return { intent: 'order' }`），框架自动合并
+        3.CheckPointer 持久化，短期会话记忆开箱即用，`compile({ checkpointer })` 后自动按 thread_id 存取历史，`messages` 通道自动累积，无需自己拼历史
+        4.流式与可观测**：内置 `updates`/`custom` 双流式模式，还能在 LangSmith 上看到每个节点的执行轨迹
+        5.**可扩展性**：以后加新意图（如退换货），只需加一个 node + 一条条件边，不用动其他代码
+2.意图路由怎么实现的
+    意图路由是LangGraph图里面的一个单独节点，位置是放在记忆召回的节点之后，主要作用是把用户输入的内容
+    转发到对应的节点去执行，定义了一个分类Prompt,让LLM从 order/knowledge/general三个词里选一个
+    通过ChatPromptTemplate结合pipe组成LCEL链，addConditionnalEdges把分类和下游路由节点连起来
+    白名单校验：识别错了走兜底general
+3. 图的状态是怎么定义的？Annotation 和 reducer 怎么理解？
+        Annotation.Root定义状态的字段，分为两类
+        ...MessagesAnnotation.spec
+        和自定义状态字段
+        reducer归约函数，作用是定义多个节点对同一个状态字段的合并逻辑
+4.一个完整的用户请求，在图上是怎么流转的？
+    START -> 长期记忆召回 (store 读取用户偏好) -> LLM 意图分类 ->
+    条件边分叉 -> 答案总结节点 (让图的出口收敛在一点，生成最终话术) ->
+    条件边触发会话压缩 -> 图结束 -> 长期记忆写入
+
+5.上下文消息太长，当前是怎么处理的
+    双层处理
+        1.注入侧限窗
+            生成/改写节点在拼 prompt 时都不会把整段历史塞进去，而是`messages.slice(0,-1).slice(-N)`
+        2.存储侧摘要压缩(超过阈值就压缩+删除)
+            走的是条件边，消息数量超过10，就进行摘要压缩，取出旧的消息，对其中每条生成一个`RemoveMessage` 让 checkpointer 按 id 删掉它们，配合`summary` 一起落盘
+6.长期记忆的读取和写入
+    1. **读在"图内"、第一步**：`recallMemories` 是 START 后第一个节点，因为下游的意图分类、订单 Agent、RAG、回答合成都需要把用户偏好注入 
+    prompt（`state.userMemories`）
+    2. **写在图外、图结束后的异步副作用**：记忆写入不在图里，而是 `GraphService.stream` 消费完流之后 
+    `updateUserMemory(...).catch(...)` 后台执行（`graph.service.ts:97-110`）。
+    原因：写入只需 `userInput + finalAnswer` 两个字段，不需要完整图状态，放图内会让用户**多等一次 LLM 调用**；异步化后用户响应立即返回，写失败也不影响主流程
+7. updates 和 custom ,values,messages 这几种流式模式有什么区别？分别用在什么场景？
+    1.updates 流式模式：每个节点执行完后， 只推节点新增的消息，适合需要实时反馈的场景，如客服对话、订单查询等
+    2.custom 流式模式：适合节点里推送的自定义事件，比如节点里通过getWriter(config)写入
+    3.values 默认值，完整状态
+    4. messages 逐token
+8.混合检索
+    向量检索：pgvector的余弦相似度检索，语义相似但可能漏精确词匹配
+    关键词检索：BM25检索，BM25，精确词命中，但理解不了语义（同义词、口语化表达）
+    关键词路失败只 `console.warn` 并返回空数组，退化为纯向量检索，不阻断主流程。
+9.RRF（倒数排名融合)
+    RRF（Reciprocal Rank Fusion，倒数排名融合）就是不看分数、只看排名 ：
+    同一篇文档在多路召回里排名越靠前，得分越高。
+    按照一个公式给文档打分，把各路分数加起来，就是最终融合分数
+10.为什么在 RAG 检索前要先做问题改写？如何改写的
+    原因：
+        用户多轮对话里经常出现"那这个还有货吗？""它和刚才那个有什么区别"这类**指代/省略**问题，直接用原问题检索基本召回不到。
+    实现：
+        用一个小 LLM chain 做 **Query Rewriting**——把"对话上下文 + 当前问题"改写成一个**独立、完整的检索问题**，补全省略主语和指代，然后**用改写后的问题去检索**
+11.长期记忆怎么提取的
+    每轮对话结束后（异步，不阻塞响应），让 LLM 结合"已有记忆 + 本轮对话"重新生成用户记忆列表：
+    定义输出schema
+    把输出schema 包成工具
+    模型绑定工具，让模型侧用工具参数做结构化约束
+12.记忆的增删（diff 写回）怎么做的
+    去重：
+        用固定的key，store存储时用upset
+    增加和删除：
+        模型返回新列表后，新条目 `store.put`；对已有记忆里不再出现的条目 `store.delete`——实现"新增 put、消失 delete"
+    上限控制
+        最多生成10条
+13.answerSynthesizer节点的作用是什么？
+    答案合成节点，把各分支产出的中间结果整理成最终恢复
+    订单结果+RAG结果+记忆+历史对话->最终答案
+13.摘要压缩什么时候触发？RemoveMessage 是什么？
+    答案合成节点的条件边，当历史消息大于指定阈值的时候，就出发摘要压缩
+    RemoveMessage` 是 LangGraph 提供的特殊消息类型——把它放进 messages 返回，框架会从 checkpoint 里**按 id 删除对应旧消息**
+14.工具怎么定义？zod schema 起什么作用？
+    使用langchain提供的tool函数，接收两个参数，一个参数是工具执行逻辑，另一个参数是工具
+    配置对象
+    { name : 'getOrderInfo' , // 工具名，模型/图里用它来引用 
+    description : '根据订单号...' , // 描述，告诉模型"什么场景该调用它" 
+    schema : z. object ({ ... }), // zod 参数 schema，模型据此生成参数 + 做运行时校验 }
+15.为什么工具调用用 temperature=0？
+    工具调用本质是"生成准确的 JSON 参数"，不是"生成有创造力的文本"。`
+    orderAgentNode` 里 `createModel({temperature:0})`（`order-agent.ts:14`），
+    保证同一问题重复调用时参数输出稳定、可复现
+16.三级降级（主模型 → 备用 → 静态兜底）怎么实现的？
+    自定义FailoverChatModel继承自BaseChatModel(聊天模型抽象基类)
+        _generate()
+        _streamResponseChunks方法
+17.token统计是如何实现的
+    调用时采集和落库聚合
+    调用时采集
+        对于非流式，直接从返回结果取
+        流式，从chunk里累加
+    落库聚合
+        采集到的token写入到审计日志的表里，input/output/total表
+18.审计日志记录了什么？怎么保证不阻塞主流程？
+    记录内容
+        traceId / userId / threadId / source / model / provider / isFailover / promptPreview(截断500字) / 输入输出token / status(success|error|timeout) / latencyMs / errorMessage
+    如何不阻塞
+        写入是异步的，只catch了
+19.LangSmith是如何实现追踪的
+    自动开启
+        LANGSMITH_TRACING=true
+        LangChain的callbacks.js里判断LANGSMITH_TRACING环境变量是true,就开启追踪
+        LangSmith 本质上就是注入到 LangChain 回调系统里的一个`BaseCallbackHandler`，
+        模型/图执行的时候，回调系统把run树异步上报到LangSmith服务器
+20.LangSmith 是怎么监控到 graph-intent-router 这条 run 的？
+    全局自动插桩
+    runName决定run名(RunnableConfig的一个字段)
+21.RAG 评估体系有哪些指标？具体怎么算的？
+        检索侧
+            召回率 
+            准确率
+        生成侧
+            忠实度
+            相关度
+
+
+    
+
+
+
+

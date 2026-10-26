@@ -1,0 +1,51 @@
+// 意图识别节点用的invoke，这个是返回结果
+
+{
+  generations: [
+    {
+      text: 'general',
+      message: AIMessage {
+        "id": "1b59e55c-4d80-408f-a810-4a25334f398e",
+        "content": "general",
+        "additional_kwargs": {
+          "reasoning_content": "我们需要回答用户。需要作为意图分类器，只返回分类词之一。用户说“你好”，属于其他对话/闲聊，general。只输出一个词。需要确保只输出 general。"
+        },
+        "response_metadata": {
+          "model_provider": "openai",
+          "model_name": "deepseek-flash",
+          "usage": {
+            "prompt_tokens": 127,
+            "completion_tokens": 42,
+            "total_tokens": 169,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 40
+            },
+            "prompt_cache_hit_tokens": 0,
+            "prompt_cache_miss_tokens": 127
+          },
+          "system_fingerprint": "aeb56401ca74e127821c4f9126dcb669"
+        },
+        "tool_calls": [],
+        "invalid_tool_calls": [],
+        "usage_metadata": {
+          "output_tokens": 42,
+          "input_tokens": 127,
+          "total_tokens": 169,
+          "input_token_details": {
+            "cache_read": 0
+          },
+          "output_token_details": {
+            "reasoning": 40
+          }
+        }
+      },
+      generationInfo: [Object]
+    }
+  ],
+  llmOutput: {
+    tokenUsage: { promptTokens: 127, completionTokens: 42, totalTokens: 169 }
+  }
+}

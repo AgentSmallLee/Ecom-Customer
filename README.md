@@ -12,7 +12,7 @@
 ecom-ai-customer/
 ├── client/          # 客服前台（Vue 3 + Vite）
 ├── monitor/         # LLM 监控台（独立 Vue 3 + Vite 应用，可单独部署）
-└── server/          # 后端（NestJS + LangChain + LangGraph + PostgreSQL）
+└── server/          # 后端（NestJS + LangChain + LangGraph + Prisma 7 + PostgreSQL）
 ```
 
 ## 功能特性
@@ -25,6 +25,7 @@ ecom-ai-customer/
 - 🧩 **LangGraph 工作流** — 意图路由 + 多节点编排的复杂对话流程
 - ⚖️ **RAG 质量评估体系** — 召回率 / 准确率 / 生成质量三维度评估，LLM-as-Judge 自动打分
 - 📑 **参考来源展示** — 前端展示回答依据的知识库来源，按文档去重
+- 📝 **LLM 调用审计** — 所有模型调用经 Prisma ORM 落库 `llm_audit_logs`，支撑监控台的日志查询、失败率与 Token 用量统计
 
 ## 快速开始
 
@@ -51,6 +52,13 @@ pnpm run init-db
 - 启用 `pgvector` 扩展（向量检索）与 `pg_trgm` 扩展（字符模糊匹配索引，当前关键词路已改用 BM25，索引保留）
 - 创建 `knowledge_embeddings` 向量表，含 HNSW 向量索引、GIN 关键词索引、全文检索索引
 - 创建 LangGraph 记忆表：`checkpoints` / `checkpoint_blobs` / `checkpoint_writes`（短期记忆）与 `store` / `store_vectors`（长期记忆）
+
+随后应用 Prisma 迁移并生成 Client（审计日志表 `llm_audit_logs` 由 Prisma 管理，详见[数据访问层](#数据访问层prisma-7)）：
+
+```bash
+pnpm prisma migrate deploy   # 应用 prisma/migrations 下的迁移，建 llm_audit_logs 表
+pnpm prisma generate         # 生成 Prisma Client 到 src/generated/prisma（该目录不入库，必做）
+```
 
 #### 3. 入库知识库（使用 RAG 功能前必做）
 
@@ -101,7 +109,7 @@ pnpm run dev
 ## 技术栈
 
 - **前端**: Vue 3、Vue Router、Vite、TypeScript
-- **后端**: NestJS、LangChain、LangGraph、PostgreSQL + pgvector + pg_trgm
+- **后端**: NestJS、LangChain、LangGraph、Prisma 7 ORM、PostgreSQL + pgvector + pg_trgm
 - **AI**: OpenAI 兼容接口大模型（DeepSeek 等）
 - **可观测性**: LangSmith 链路追踪 + 自建审计日志（`llm_audit_logs`）
 - **包管理器**: pnpm
@@ -141,6 +149,33 @@ LANGSMITH_PROJECT=...         # 项目名称，WebUI 按此筛选运行记录
 ### 效果图
 
 ![LangSmith 监控](图片/LangSmith监控.png)
+
+## 数据访问层（Prisma 7）
+
+项目三类表分属三个系统管理，Prisma 只负责其中的业务表，互不干扰（避免多系统共用一个库时的迁移漂移问题）：
+
+| 表 | 管理者 | 访问方式 |
+|---|---|---|
+| `llm_audit_logs`（LLM 调用审计日志） | **Prisma 7**（schema + migrations） | NestJS 注入 `PrismaService` |
+| `knowledge_embeddings`（知识库向量） | `init-db` / `ingest` 脚本（原生 SQL） | `pg` 连接池 |
+| `checkpoints` / `store` 等（LangGraph 记忆） | LangGraph `PostgresSaver` / `PostgresStore` | 框架内部读写 |
+
+### Prisma 在项目中的职责
+
+Prisma 唯一的 model 是 [LlmAuditLog](server/prisma/schema.prisma)（映射 `llm_audit_logs` 表），由 [AuditLogService](server/src/llm/audit-log.service.ts) 调用：
+
+- `prisma.llmAuditLog.create()` — 每次 LLM 调用异步写一条审计记录（失败只打日志，不影响主流程）
+- `findMany()` / `count()` — 监控台审计日志的多条件过滤与分页查询
+- `$queryRaw` — Token 用量按天/模型分组统计、近 N 分钟失败率等聚合查询
+
+表结构变更走 Prisma Migrate，迁移记录在 `server/prisma/migrations/`（含字段重命名保留数据的手写迁移）。
+
+### Prisma 7 关键配置（与 Prisma 5 差异较大）
+
+- **生成位置**：generator 为新的 `prisma-client`，Client 生成到 `src/generated/prisma/`（不入库）；`moduleFormat = "cjs"` 是 NestJS（CommonJS）必需配置
+- **Driver Adapter**：Prisma 7 移除了内置数据库驱动，[PrismaService](server/src/prisma/prisma.service.ts) 通过 `@prisma/adapter-pg` + `pg` Pool 连接数据库，随 NestJS 模块生命周期 `$connect()` / `$disconnect()`
+- **配置文件**：数据库 URL 不再写在 `schema.prisma`，而在 [prisma7.config.ts](server/prisma7.config.ts) 中从 `DATABASE_URL` 读取
+- 完整接入与字段变更流程见 [server/PRISMA_SETUP.md](server/PRISMA_SETUP.md)
 
 ## 前端页面
 
@@ -284,4 +319,4 @@ pnpm run eval-all -- --limit 5                   # 只跑前 5 题（冒烟验�
 
 > 准确率评估最费额度（每道题每个 K 都要单独判相关性），正式跑之前建议先加 `--limit` 冒烟。
 
-> 已部署过旧版本的项目：重新执行 `pnpm run init-db` 补建表和索引即可。
+> 已部署过旧版本的项目：重新执行 `pnpm run init-db` 补建表和索引，并执行 `pnpm prisma migrate deploy` 同步审计日志表结构即可。

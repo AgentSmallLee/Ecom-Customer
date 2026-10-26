@@ -1,0 +1,446 @@
+AIMessageChunk {
+  "id": "52d33f3a-e71e-4138-958a-501a240e4f92",
+  "content": "",
+  "additional_kwargs": {
+    "tool_calls": [
+      {
+        "index": 0,
+        "id": "call_00_haKZs4vR5zSW22pb6onu5332",
+        "type": "function",
+        "function": "[Object]"
+      }
+    ]
+  },
+  "response_metadata": {
+    "prompt": 0,
+    "completion": 0,
+    "model_provider": "openai",
+    "usage": {}
+  },
+  "tool_calls": [
+    {
+      "name": "getOrderInfo",
+      "args": {},
+      "id": "call_00_haKZs4vR5zSW22pb6onu5332",
+      "type": "tool_call"
+    }
+  ],
+  "tool_call_chunks": [
+    {
+      "name": "getOrderInfo",
+      "args": "",
+      "id": "call_00_haKZs4vR5zSW22pb6onu5332",
+      "index": 0,
+      "type": "tool_call_chunk"
+    }
+  ],
+  "invalid_tool_calls": []
+}
+AIMessageChunk {
+  "id": "52d33f3a-e71e-4138-958a-501a240e4f92",
+  "content": "",
+  "additional_kwargs": {
+    "tool_calls": [
+      {
+        "index": 0,
+        "function": "[Object]"
+      }
+    ]
+  },
+  "response_metadata": {
+    "prompt": 0,
+    "completion": 0,
+    "model_provider": "openai",
+    "usage": {}
+  },
+  "tool_calls": [],
+  "tool_call_chunks": [
+    {
+      "args": "{",
+      "index": 0,
+      "type": "tool_call_chunk"
+    }
+  ],
+  "invalid_tool_calls": [
+    {
+      "name": "",
+      "args": "{",
+      "error": "Malformed args.",
+      "type": "invalid_tool_call"
+    }
+  ]
+}
+AIMessageChunk {
+  "id": "52d33f3a-e71e-4138-958a-501a240e4f92",
+  "content": "",
+  "additional_kwargs": {
+    "tool_calls": [
+      {
+        "index": 0,
+        "function": "[Object]"
+      }
+    ]
+  },
+  "response_metadata": {
+    "prompt": 0,
+    "completion": 0,
+    "model_provider": "openai",
+    "usage": {}
+  },
+  "tool_calls": [],
+  "tool_call_chunks": [
+    {
+      "args": "\"",
+      "index": 0,
+      "type": "tool_call_chunk"
+    }
+  ],
+  "invalid_tool_calls": [
+    {
+      "name": "",
+      "args": "\"",
+      "error": "Malformed args.",
+      "type": "invalid_tool_call"
+    }
+  ]
+}
+AIMessageChunk {
+  "id": "52d33f3a-e71e-4138-958a-501a240e4f92",
+  "content": "",
+  "additional_kwargs": {
+    "tool_calls": [
+      {
+        "index": 0,
+        "function": "[Object]"
+      }
+    ]
+  },
+  "response_metadata": {
+    "prompt": 0,
+    "completion": 0,
+    "model_provider": "openai",
+    "usage": {}
+  },
+  "tool_calls": [],
+  "tool_call_chunks": [
+    {
+      "args": "order",
+      "index": 0,
+      "type": "tool_call_chunk"
+    }
+  ],
+  "invalid_tool_calls": [
+    {
+      "name": "",
+      "args": "order",
+      "error": "Malformed args.",
+      "type": "invalid_tool_call"
+    }
+  ]
+}
+AIMessageChunk {
+  "id": "52d33f3a-e71e-4138-958a-501a240e4f92",
+  "content": "",
+  "additional_kwargs": {
+    "tool_calls": [
+      {
+        "index": 0,
+        "function": "[Object]"
+      }
+    ]
+  },
+  "response_metadata": {
+    "prompt": 0,
+    "completion": 0,
+    "model_provider": "openai",
+    "usage": {}
+  },
+  "tool_calls": [],
+  "tool_call_chunks": [
+    {
+      "args": "Id",
+      "index": 0,
+      "type": "tool_call_chunk"
+    }
+  ],
+  "invalid_tool_calls": [
+    {
+      "name": "",
+      "args": "Id",
+      "error": "Malformed args.",
+      "type": "invalid_tool_call"
+    }
+  ]
+}
+AIMessageChunk {
+  "id": "52d33f3a-e71e-4138-958a-501a240e4f92",
+  "content": "",
+  "additional_kwargs": {
+    "tool_calls": [
+      {
+        "index": 0,
+        "function": "[Object]"
+      }
+    ]
+  },
+  "response_metadata": {
+    "prompt": 0,
+    "completion": 0,
+    "model_provider": "openai",
+    "usage": {}
+  },
+  "tool_calls": [],
+  "tool_call_chunks": [
+    {
+      "args": "\"",
+      "index": 0,
+      "type": "tool_call_chunk"
+    }
+  ],
+  "invalid_tool_calls": [
+    {
+      "name": "",
+      "args": "\"",
+      "error": "Malformed args.",
+      "type": "invalid_tool_call"
+    }
+  ]
+}
+AIMessageChunk {
+  "id": "52d33f3a-e71e-4138-958a-501a240e4f92",
+  "content": "",
+  "additional_kwargs": {
+    "tool_calls": [
+      {
+        "index": 0,
+        "function": "[Object]"
+      }
+    ]
+  },
+  "response_metadata": {
+    "prompt": 0,
+    "completion": 0,
+    "model_provider": "openai",
+    "usage": {}
+  },
+  "tool_calls": [],
+  "tool_call_chunks": [
+    {
+      "args": ": ",
+      "index": 0,
+      "type": "tool_call_chunk"
+    }
+  ],
+  "invalid_tool_calls": [
+    {
+      "name": "",
+      "args": ":",
+      "error": "Malformed args.",
+      "type": "invalid_tool_call"
+    }
+  ]
+}
+AIMessageChunk {
+  "id": "52d33f3a-e71e-4138-958a-501a240e4f92",
+  "content": "",
+  "additional_kwargs": {
+    "tool_calls": [
+      {
+        "index": 0,
+        "function": "[Object]"
+      }
+    ]
+  },
+  "response_metadata": {
+    "prompt": 0,
+    "completion": 0,
+    "model_provider": "openai",
+    "usage": {}
+  },
+  "tool_calls": [],
+  "tool_call_chunks": [
+    {
+      "args": "\"",
+      "index": 0,
+      "type": "tool_call_chunk"
+    }
+  ],
+  "invalid_tool_calls": [
+    {
+      "name": "",
+      "args": "\"",
+      "error": "Malformed args.",
+      "type": "invalid_tool_call"
+    }
+  ]
+}
+AIMessageChunk {
+  "id": "52d33f3a-e71e-4138-958a-501a240e4f92",
+  "content": "",
+  "additional_kwargs": {
+    "tool_calls": [
+      {
+        "index": 0,
+        "function": "[Object]"
+      }
+    ]
+  },
+  "response_metadata": {
+    "prompt": 0,
+    "completion": 0,
+    "model_provider": "openai",
+    "usage": {}
+  },
+  "tool_calls": [],
+  "tool_call_chunks": [
+    {
+      "args": "ORD",
+      "index": 0,
+      "type": "tool_call_chunk"
+    }
+  ],
+  "invalid_tool_calls": [
+    {
+      "name": "",
+      "args": "ORD",
+      "error": "Malformed args.",
+      "type": "invalid_tool_call"
+    }
+  ]
+}
+AIMessageChunk {
+  "id": "52d33f3a-e71e-4138-958a-501a240e4f92",
+  "content": "",
+  "additional_kwargs": {
+    "tool_calls": [
+      {
+        "index": 0,
+        "function": "[Object]"
+      }
+    ]
+  },
+  "response_metadata": {
+    "prompt": 0,
+    "completion": 0,
+    "model_provider": "openai",
+    "usage": {}
+  },
+  "tool_calls": [],
+  "tool_call_chunks": [
+    {
+      "args": "-",
+      "index": 0,
+      "type": "tool_call_chunk"
+    }
+  ],
+  "invalid_tool_calls": [
+    {
+      "name": "",
+      "args": "-",
+      "error": "Malformed args.",
+      "type": "invalid_tool_call"
+    }
+  ]
+}
+AIMessageChunk {
+  "id": "52d33f3a-e71e-4138-958a-501a240e4f92",
+  "content": "",
+  "additional_kwargs": {
+    "tool_calls": [
+      {
+        "index": 0,
+        "function": "[Object]"
+      }
+    ]
+  },
+  "response_metadata": {
+    "prompt": 0,
+    "completion": 0,
+    "model_provider": "openai",
+    "usage": {}
+  },
+  "tool_calls": [],
+  "tool_call_chunks": [
+    {
+      "args": "001",
+      "index": 0,
+      "type": "tool_call_chunk"
+    }
+  ],
+  "invalid_tool_calls": [
+    {
+      "name": "",
+      "args": "001",
+      "error": "Malformed args.",
+      "type": "invalid_tool_call"
+    }
+  ]
+}
+AIMessageChunk {
+  "id": "52d33f3a-e71e-4138-958a-501a240e4f92",
+  "content": "",
+  "additional_kwargs": {
+    "tool_calls": [
+      {
+        "index": 0,
+        "function": "[Object]"
+      }
+    ]
+  },
+  "response_metadata": {
+    "prompt": 0,
+    "completion": 0,
+    "model_provider": "openai",
+    "usage": {}
+  },
+  "tool_calls": [],
+  "tool_call_chunks": [
+    {
+      "args": "\"",
+      "index": 0,
+      "type": "tool_call_chunk"
+    }
+  ],
+  "invalid_tool_calls": [
+    {
+      "name": "",
+      "args": "\"",
+      "error": "Malformed args.",
+      "type": "invalid_tool_call"
+    }
+  ]
+}
+AIMessageChunk {
+  "id": "52d33f3a-e71e-4138-958a-501a240e4f92",
+  "content": "",
+  "additional_kwargs": {
+    "tool_calls": [
+      {
+        "index": 0,
+        "function": "[Object]"
+      }
+    ]
+  },
+  "response_metadata": {
+    "prompt": 0,
+    "completion": 0,
+    "model_provider": "openai",
+    "usage": {}
+  },
+  "tool_calls": [],
+  "tool_call_chunks": [
+    {
+      "args": "}",
+      "index": 0,
+      "type": "tool_call_chunk"
+    }
+  ],
+  "invalid_tool_calls": [
+    {
+      "name": "",
+      "args": "}",
+      "error": "Malformed args.",
+      "type": "invalid_tool_call"
+    }
+  ]
+}

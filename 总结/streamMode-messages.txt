@@ -1,0 +1,77 @@
+每个token一个AIMessageChunk
+    [
+  AIMessageChunk {
+    "id": "8454f4b6-8e45-4fee-99c4-625ccfa6503e",
+    "content": "如果您",
+    "additional_kwargs": {
+      "reasoning_content": null
+    },
+    "response_metadata": {
+      "prompt": 0,
+      "completion": 0,
+      "model_provider": "openai",
+      "usage": {}
+    },
+    "tool_calls": [],
+    "tool_call_chunks": [],
+    "invalid_tool_calls": []
+  },
+  {
+    tags: [],
+    name: 'graph-agent-tool-result',
+    ls_integration: 'langchain_chat_model',
+    thread_id: 'agent:U-dev-0001:55546b91-096b-4edb-87c3-190af1401eed',
+    langgraph_step: 3,
+    langgraph_node: 'agent',
+    langgraph_triggers: [ 'branch:to:agent' ],
+    langgraph_path: [ '__pregel_pull', 'agent' ],
+    langgraph_checkpoint_ns: 'agent:a74d5e81-201e-5809-bf4d-6c698816bce7',
+    checkpoint_ns: 'agent:a74d5e81-201e-5809-bf4d-6c698816bce7',
+    source: 'graph-agent-tool-result',
+    traceId: '0d44a1f5-17ac-4b13-beeb-365a37ca2ab9',
+    userId: 'U-dev-0001',
+    threadId: 'agent:U-dev-0001:55546b91-096b-4edb-87c3-190af1401eed',
+    ls_model_type: 'chat',
+    ls_stop: undefined,
+    ls_provider: 'FailoverChatModel',
+    versions: { '@langchain/core': '1.2.9' }
+  }
+]
+[
+  AIMessageChunk {
+    "id": "8454f4b6-8e45-4fee-99c4-625ccfa6503e",
+    "content": "确认",
+    "additional_kwargs": {
+      "reasoning_content": null
+    },
+    "response_metadata": {
+      "prompt": 0,
+      "completion": 0,
+      "model_provider": "openai",
+      "usage": {}
+    },
+    "tool_calls": [],
+    "tool_call_chunks": [],
+    "invalid_tool_calls": []
+  },
+  {
+    tags: [],
+    name: 'graph-agent-tool-result',
+    ls_integration: 'langchain_chat_model',
+    thread_id: 'agent:U-dev-0001:55546b91-096b-4edb-87c3-190af1401eed',
+    langgraph_step: 3,
+    langgraph_node: 'agent',
+    langgraph_triggers: [ 'branch:to:agent' ],
+    langgraph_path: [ '__pregel_pull', 'agent' ],
+    langgraph_checkpoint_ns: 'agent:a74d5e81-201e-5809-bf4d-6c698816bce7',
+    checkpoint_ns: 'agent:a74d5e81-201e-5809-bf4d-6c698816bce7',
+    source: 'graph-agent-tool-result',
+    traceId: '0d44a1f5-17ac-4b13-beeb-365a37ca2ab9',
+    userId: 'U-dev-0001',
+    threadId: 'agent:U-dev-0001:55546b91-096b-4edb-87c3-190af1401eed',
+    ls_model_type: 'chat',
+    ls_stop: undefined,
+    ls_provider: 'FailoverChatModel',
+    versions: { '@langchain/core': '1.2.9' }
+  }
+]
